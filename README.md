@@ -29,7 +29,7 @@ in SQLite.
   every set, estimated 1RMs and PRs; edit, repeat, save as template, or delete it.
 - **Exercises** – ~900 exercises: a hand-curated core set of ~180 plus the rest of
   [free-exercise-db](https://github.com/yuhonas/free-exercise-db). An anatomical front/back **body map**
-  (male or female figure) lets you tap a muscle to see its exercises. Search, filter by body part and
+  (gender-neutral by default, or male/female) lets you tap a muscle to see its exercises. Search, filter by body part and
   equipment, and type (strength, stretching, cardio, plyometrics, Olympic lifting, strongman), sort
   by most used, create custom exercises. Each exercise has **About** (start/end
   photos, muscles, level and step-by-step instructions where available), **History**, **Charts**
@@ -101,5 +101,6 @@ Exercise photos and instructions come from
 domain under the Unlicense. The JSON is bundled with the app (refresh it with
 `node scripts/build-free-exercise-db.mjs`); photos are loaded from GitHub and cached on the device.
 
-The body map figures come from
+The neutral body map figure is drawn for this app (`src/data/neutralBody.ts`). The male and
+female figures come from
 [react-native-body-highlighter](https://github.com/HichamELBSI/react-native-body-highlighter) (MIT).

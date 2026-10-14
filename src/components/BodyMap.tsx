@@ -5,9 +5,10 @@ import Body, { type ExtendedBodyPart, type Slug } from 'react-native-body-highli
 import { colors, radius, spacing } from '@/lib/theme';
 import type { BodyPart } from '@/lib/types';
 import { useSettings } from '@/state/SettingsContext';
+import { NeutralBody } from './NeutralBody';
 import { Chip } from './ui';
 
-/** Which app body part each muscle on the anatomical figure belongs to. */
+/** Which app body part each muscle on the anatomical figures belongs to. */
 const SLUG_TO_PART: Partial<Record<Slug, BodyPart>> = {
   neck: 'Neck',
   trapezius: 'Back',
@@ -40,9 +41,16 @@ const EXTRA_PARTS: BodyPart[] = ['Full Body', 'Cardio', 'Other'];
 const FIGURE_WIDTH = 200;
 const GAP = 12;
 
+const FIGURES = [
+  { value: 'neutral', label: 'Neutral' },
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+] as const;
+
 /**
  * Anatomical front and back figures; tapping a muscle selects its body part (tapping it again
- * clears the selection). Figures from react-native-body-highlighter (MIT).
+ * clears the selection). The neutral figure is our own (src/data/neutralBody.ts); the male and
+ * female figures come from react-native-body-highlighter (MIT).
  */
 export function BodyMap({
   selected,
@@ -63,26 +71,40 @@ export function BodyMap({
     slug,
     intensity: 1,
   }));
-  const onPress = (part: ExtendedBodyPart) => {
-    const mapped = part.slug ? SLUG_TO_PART[part.slug] : undefined;
+  const onPressSlug = (slug: Slug | undefined) => {
+    const mapped = slug ? SLUG_TO_PART[slug] : undefined;
     if (mapped) toggle(mapped);
   };
+  const figureKind = settings.bodyMapGender;
   const caption = selected
     ? `${selected}${counts ? ` · ${counts.get(selected) ?? 0} exercises` : ''}`
     : 'Tap a muscle';
 
   const figure = (side: 'front' | 'back') => (
     <View style={styles.figure}>
-      <Body
-        data={highlighted}
-        side={side}
-        gender={settings.bodyMapGender}
-        scale={scale}
-        colors={[colors.primary]}
-        defaultFill="#3B414E"
-        border={colors.faint}
-        onBodyPartPress={onPress}
-      />
+      {figureKind === 'neutral' ? (
+        <NeutralBody
+          side={side}
+          scale={scale}
+          highlighted={new Set(highlighted.map((h) => h.slug as string))}
+          highlightColor={colors.primary}
+          defaultFill="#3B414E"
+          silhouetteFill="#2B303A"
+          border={colors.faint}
+          onPress={onPressSlug}
+        />
+      ) : (
+        <Body
+          data={highlighted}
+          side={side}
+          gender={figureKind}
+          scale={scale}
+          colors={[colors.primary]}
+          defaultFill="#3B414E"
+          border={colors.faint}
+          onBodyPartPress={(part) => onPressSlug(part.slug)}
+        />
+      )}
       <Text style={styles.sideLabel}>{side === 'front' ? 'FRONT' : 'BACK'}</Text>
     </View>
   );
@@ -104,16 +126,14 @@ export function BodyMap({
         ))}
       </View>
       <View style={styles.gender}>
-        <Chip
-          label="Male"
-          selected={settings.bodyMapGender === 'male'}
-          onPress={() => updateSettings({ bodyMapGender: 'male' })}
-        />
-        <Chip
-          label="Female"
-          selected={settings.bodyMapGender === 'female'}
-          onPress={() => updateSettings({ bodyMapGender: 'female' })}
-        />
+        {FIGURES.map((f) => (
+          <Chip
+            key={f.value}
+            label={f.label}
+            selected={figureKind === f.value}
+            onPress={() => updateSettings({ bodyMapGender: f.value })}
+          />
+        ))}
       </View>
     </View>
   );
