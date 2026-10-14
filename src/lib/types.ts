@@ -170,6 +170,8 @@ export interface Settings {
   plates: number[];
   vibrateOnRestEnd: boolean;
   keepScreenOn: boolean;
+  /** Which figure the exercise body map shows. */
+  bodyMapGender: 'male' | 'female';
 }
 
 export const MEASUREMENT_TYPES = [

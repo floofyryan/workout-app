@@ -140,6 +140,7 @@ export const DEFAULT_SETTINGS: Settings = {
   plates: [25, 20, 15, 10, 5, 2.5, 1.25],
   vibrateOnRestEnd: true,
   keepScreenOn: true,
+  bodyMapGender: 'male',
 };
 
 export const DEFAULT_IMPERIAL_PLATES = [45, 35, 25, 10, 5, 2.5];
