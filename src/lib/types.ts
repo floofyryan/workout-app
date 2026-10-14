@@ -171,7 +171,7 @@ export interface Settings {
   vibrateOnRestEnd: boolean;
   keepScreenOn: boolean;
   /** Which figure the exercise body map shows. */
-  bodyMapGender: 'neutral' | 'male' | 'female';
+  bodyMapGender: 'critter' | 'male' | 'female';
 }
 
 export const MEASUREMENT_TYPES = [

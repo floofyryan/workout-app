@@ -5,7 +5,7 @@ import Body, { type ExtendedBodyPart, type Slug } from 'react-native-body-highli
 import { colors, radius, spacing } from '@/lib/theme';
 import type { BodyPart } from '@/lib/types';
 import { useSettings } from '@/state/SettingsContext';
-import { NeutralBody } from './NeutralBody';
+import { CritterBody } from './CritterBody';
 import { Chip } from './ui';
 
 /** Which app body part each muscle on the anatomical figures belongs to. */
@@ -42,14 +42,14 @@ const FIGURE_WIDTH = 200;
 const GAP = 12;
 
 const FIGURES = [
-  { value: 'neutral', label: 'Neutral' },
+  { value: 'critter', label: 'Critter' },
   { value: 'male', label: 'Male' },
   { value: 'female', label: 'Female' },
 ] as const;
 
 /**
  * Anatomical front and back figures; tapping a muscle selects its body part (tapping it again
- * clears the selection). The neutral figure is our own (src/data/neutralBody.ts); the male and
+ * clears the selection). The critter is our own (src/data/critterBody.ts); the male and
  * female figures come from react-native-body-highlighter (MIT).
  */
 export function BodyMap({
@@ -75,22 +75,19 @@ export function BodyMap({
     const mapped = slug ? SLUG_TO_PART[slug] : undefined;
     if (mapped) toggle(mapped);
   };
-  const figureKind = settings.bodyMapGender;
+  const figureKind = settings.bodyMapGender === 'male' || settings.bodyMapGender === 'female' ? settings.bodyMapGender : 'critter';
   const caption = selected
     ? `${selected}${counts ? ` · ${counts.get(selected) ?? 0} exercises` : ''}`
     : 'Tap a muscle';
 
   const figure = (side: 'front' | 'back') => (
     <View style={styles.figure}>
-      {figureKind === 'neutral' ? (
-        <NeutralBody
+      {figureKind === 'critter' ? (
+        <CritterBody
           side={side}
           scale={scale}
           highlighted={new Set(highlighted.map((h) => h.slug as string))}
           highlightColor={colors.primary}
-          defaultFill="#3B414E"
-          silhouetteFill="#2B303A"
-          border={colors.faint}
           onPress={onPressSlug}
         />
       ) : (
