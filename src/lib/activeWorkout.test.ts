@@ -23,6 +23,7 @@ const template: Template = {
   id: 1,
   name: 'Push',
   notes: '',
+  kind: 'workout',
   lastUsedAt: null,
   exercises: [
     {

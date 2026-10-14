@@ -7,8 +7,9 @@ in SQLite.
 
 ## Features
 
-- **Workout tab** – start an empty workout or start from a template. Templates show their exercises
-  and when they were last performed; duplicate, edit or delete them.
+- **Workout tab** – start an empty workout or start from a template. Templates are split into
+  **Workout templates** and **Stretch routines** (two starter stretch routines included); cards show
+  their exercises and when they were last performed; duplicate, edit or delete them.
 - **Live workout** – elapsed timer, editable name and notes, and per exercise a
   `SET | PREVIOUS | KG | REPS | ✓` grid:
   - "Previous" shows what you did last time; tap it to copy those values. Ticking a set with blank
@@ -27,7 +28,8 @@ in SQLite.
 - **History** – workouts grouped by month with "Exercise | Best set" summaries; open one to see
   every set, estimated 1RMs and PRs; edit, repeat, save as template, or delete it.
 - **Exercises** – ~900 exercises: a hand-curated core set of ~180 plus the rest of
-  [free-exercise-db](https://github.com/yuhonas/free-exercise-db). Search, filter by body part and
+  [free-exercise-db](https://github.com/yuhonas/free-exercise-db). A front/back **body map** lets you
+  tap a muscle group to see its exercises. Search, filter by body part and
   equipment, and type (strength, stretching, cardio, plyometrics, Olympic lifting, strongman), sort
   by most used, create custom exercises. Each exercise has **About** (start/end
   photos, muscles, level and step-by-step instructions where available), **History**, **Charts**

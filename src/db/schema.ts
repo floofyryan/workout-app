@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { SEED_EXERCISES, SEED_TEMPLATES } from '../data/exercises';
+import { SEED_EXERCISES, SEED_STRETCH_TEMPLATES, SEED_TEMPLATES } from '../data/exercises';
 import { FREE_EXERCISE_DB_LINKS } from '../data/freeExerciseDbMap';
 import { displayName, toBodyPart, toEquipment, toExerciseType, type FreeExercise } from '../lib/freeExerciseDb';
 
@@ -126,6 +126,35 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
     );
     for (const e of SEED_EXERCISES) {
       if (e.category) await db.runAsync('UPDATE exercises SET category = ? WHERE name = ?', e.category, e.name);
+    }
+  },
+  // v4: templates are either workouts or stretch routines; add two starter stretch routines.
+  async (db) => {
+    await db.execAsync("ALTER TABLE templates ADD COLUMN kind TEXT NOT NULL DEFAULT 'workout'");
+    const pos = await db.getFirstAsync<{ p: number | null }>('SELECT MAX(position) AS p FROM templates');
+    let position = (pos?.p ?? -1) + 1;
+    for (const t of SEED_STRETCH_TEMPLATES) {
+      const res = await db.runAsync(
+        "INSERT INTO templates (name, notes, kind, position, created_at) VALUES (?, ?, 'stretch', ?, ?)",
+        t.name,
+        t.notes,
+        position++,
+        Date.now(),
+      );
+      let i = 0;
+      for (const te of t.exercises) {
+        const ex = await db.getFirstAsync<{ id: number }>('SELECT id FROM exercises WHERE name = ?', te.name);
+        if (!ex) continue;
+        const sets = [{ setType: 'normal', weight: null, reps: null, durationS: te.seconds, distanceM: null, rpe: null }];
+        await db.runAsync(
+          'INSERT INTO template_exercises (template_id, exercise_id, position, rest_seconds, sets_json) VALUES (?, ?, ?, ?, ?)',
+          res.lastInsertRowId,
+          ex.id,
+          i++,
+          t.restSeconds,
+          JSON.stringify(sets),
+        );
+      }
     }
   },
 ];

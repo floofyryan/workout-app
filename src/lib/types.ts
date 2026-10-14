@@ -126,10 +126,15 @@ export interface TemplateExercise {
   sets: SetData[];
 }
 
+export const TEMPLATE_KINDS = ['workout', 'stretch'] as const;
+export type TemplateKind = (typeof TEMPLATE_KINDS)[number];
+
 export interface Template {
   id: number;
   name: string;
   notes: string;
+  /** Workout routines and stretch routines are listed separately. */
+  kind: TemplateKind;
   lastUsedAt: number | null;
   exercises: TemplateExercise[];
 }

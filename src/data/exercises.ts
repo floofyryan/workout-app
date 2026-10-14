@@ -284,3 +284,46 @@ export const SEED_TEMPLATES: { name: string; notes: string; exercises: { name: s
     ],
   },
 ];
+
+/**
+ * Starter stretch routines (exercise names come from free-exercise-db's stretches).
+ * Each stretch is one timed set; the short rest is time to get into the next position.
+ */
+export const SEED_STRETCH_TEMPLATES: {
+  name: string;
+  notes: string;
+  restSeconds: number;
+  exercises: { name: string; seconds: number }[];
+}[] = [
+  {
+    name: 'Full Body Stretch',
+    notes: 'Cool-down after any workout',
+    restSeconds: 10,
+    exercises: [
+      { name: 'Side Neck Stretch', seconds: 30 },
+      { name: 'Chest And Front Of Shoulder Stretch', seconds: 30 },
+      { name: 'Shoulder Stretch', seconds: 30 },
+      { name: 'Triceps Stretch', seconds: 30 },
+      { name: 'Cat Stretch', seconds: 30 },
+      { name: "Child's Pose", seconds: 45 },
+      { name: 'Kneeling Hip Flexor', seconds: 30 },
+      { name: 'Quad Stretch', seconds: 30 },
+      { name: 'Hamstring Stretch', seconds: 30 },
+      { name: 'Calf Stretch Hands Against Wall', seconds: 30 },
+    ],
+  },
+  {
+    name: 'Lower Body Stretch',
+    notes: 'After leg day or a run',
+    restSeconds: 10,
+    exercises: [
+      { name: "World's Greatest Stretch", seconds: 45 },
+      { name: 'Kneeling Hip Flexor', seconds: 30 },
+      { name: 'All Fours Quad Stretch', seconds: 30 },
+      { name: 'Seated Floor Hamstring Stretch', seconds: 45 },
+      { name: 'Seated Glute', seconds: 30 },
+      { name: 'Side Lying Groin Stretch', seconds: 30 },
+      { name: 'Standing Gastrocnemius Calf Stretch', seconds: 30 },
+    ],
+  },
+];

@@ -11,9 +11,11 @@ import {
   EXERCISE_CATEGORIES,
   EXERCISE_CATEGORY_LABELS,
   exerciseCategory,
+  type BodyPart,
   type Exercise,
   type ExerciseCategory,
 } from '@/lib/types';
+import { BodyMap } from './BodyMap';
 import { ExerciseThumb } from './ExerciseMedia';
 import { Chip } from './ui';
 
@@ -34,26 +36,38 @@ export function ExerciseList({
     counts: await exerciseUseCounts(db),
   }));
   const [query, setQuery] = useState('');
-  const [bodyPart, setBodyPart] = useState<string | null>(null);
+  const [bodyPart, setBodyPart] = useState<BodyPart | null>(null);
+  const [showMap, setShowMap] = useState(true);
   const [equipment, setEquipment] = useState<string | null>(null);
   const [category, setCategory] = useState<ExerciseCategory | null>(null);
   const [sort, setSort] = useState<Sort>('name');
 
-  const filtered = useMemo(() => {
+  // Exercises matching every filter except body part (the body map shows counts per part).
+  const matching = useMemo(() => {
     if (!data) return [];
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-    const list = data.exercises.filter(
+    return data.exercises.filter(
       (e) =>
-        (!bodyPart || e.bodyPart === bodyPart) &&
         (!equipment || e.equipment === equipment) &&
         (!category || exerciseCategory(e) === category) &&
         words.every((w) => e.name.toLowerCase().includes(w)),
     );
+  }, [data, query, equipment, category]);
+
+  const partCounts = useMemo(() => {
+    const m = new Map<BodyPart, number>();
+    for (const e of matching) m.set(e.bodyPart, (m.get(e.bodyPart) ?? 0) + 1);
+    return m;
+  }, [matching]);
+
+  const filtered = useMemo(() => {
+    if (!data) return [];
+    const list = matching.filter((e) => !bodyPart || e.bodyPart === bodyPart);
     if (sort === 'frequency') {
       list.sort((a, b) => (data.counts.get(b.id) ?? 0) - (data.counts.get(a.id) ?? 0) || a.name.localeCompare(b.name));
     }
     return list;
-  }, [data, query, bodyPart, equipment, category, sort]);
+  }, [data, matching, bodyPart, sort]);
 
   return (
     <FlatList
@@ -79,7 +93,17 @@ export function ExerciseList({
                 <Ionicons name="close-circle" size={18} color={colors.muted} />
               </Pressable>
             ) : null}
+            <Pressable
+              onPress={() => setShowMap((v) => !v)}
+              hitSlop={8}
+              style={[styles.mapToggle, showMap && styles.mapToggleOn]}
+              accessibilityLabel={showMap ? 'Hide body map' : 'Show body map'}
+            >
+              <Ionicons name="body-outline" size={16} color={showMap ? '#fff' : colors.primary} />
+              <Text style={[styles.mapToggleText, showMap && { color: '#fff' }]}>Body map</Text>
+            </Pressable>
           </View>
+          {showMap && <BodyMap selected={bodyPart} onSelect={setBodyPart} counts={partCounts} />}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips} keyboardShouldPersistTaps="handled">
             <Chip label={sort === 'name' ? 'A–Z' : 'Most used'} selected onPress={() => setSort(sort === 'name' ? 'frequency' : 'name')} />
             <Chip label="Any body part" selected={!bodyPart} onPress={() => setBodyPart(null)} />
@@ -146,7 +170,19 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     marginTop: spacing.sm,
   },
-  searchInput: { flex: 1, color: colors.text, paddingVertical: 10, paddingHorizontal: spacing.sm, fontSize: 16 },
+  mapToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: spacing.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(59,130,246,0.15)',
+  },
+  mapToggleOn: { backgroundColor: colors.primary },
+  mapToggleText: { color: colors.primary, fontSize: 12, fontWeight: '700' },
+  searchInput: { flex: 1, minWidth: 0, color: colors.text, paddingVertical: 10, paddingHorizontal: spacing.sm, fontSize: 16 },
   chips: { paddingHorizontal: spacing.lg, marginTop: spacing.sm, flexGrow: 0 },
   item: {
     flexDirection: 'row',

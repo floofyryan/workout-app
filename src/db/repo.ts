@@ -15,6 +15,7 @@ import type {
   Settings,
   Template,
   TemplateExercise,
+  TemplateKind,
   WorkoutDetail,
   WorkoutExerciseDetail,
   WorkoutSummary,
@@ -248,8 +249,11 @@ interface TemplateRow {
   id: number;
   name: string;
   notes: string;
+  kind: string;
   last_used_at: number | null;
 }
+
+const toKind = (k: string): TemplateKind => (k === 'stretch' ? 'stretch' : 'workout');
 
 interface TemplateExerciseRow {
   template_id: number;
@@ -281,6 +285,7 @@ export async function listTemplates(db: SQLiteDatabase): Promise<Template[]> {
     id: r.id,
     name: r.name,
     notes: r.notes,
+    kind: toKind(r.kind),
     lastUsedAt: r.last_used_at,
     exercises: byTemplate.get(r.id) ?? [],
   }));
@@ -297,6 +302,7 @@ export async function getTemplate(db: SQLiteDatabase, id: number): Promise<Templ
     id: r.id,
     name: r.name,
     notes: r.notes,
+    kind: toKind(r.kind),
     lastUsedAt: r.last_used_at,
     exercises: exRows.map((e) => ({
       exerciseId: e.exercise_id,
@@ -310,6 +316,7 @@ export async function getTemplate(db: SQLiteDatabase, id: number): Promise<Templ
 export interface TemplateInput {
   name: string;
   notes: string;
+  kind: TemplateKind;
   exercises: TemplateExercise[];
 }
 
@@ -320,15 +327,22 @@ export async function saveTemplate(db: SQLiteDatabase, id: number | null, t: Tem
     if (templateId == null) {
       const pos = await db.getFirstAsync<{ p: number | null }>('SELECT MAX(position) AS p FROM templates');
       const res = await db.runAsync(
-        'INSERT INTO templates (name, notes, position, created_at) VALUES (?, ?, ?, ?)',
+        'INSERT INTO templates (name, notes, kind, position, created_at) VALUES (?, ?, ?, ?, ?)',
         t.name.trim() || 'New Template',
         t.notes,
+        t.kind,
         (pos?.p ?? -1) + 1,
         Date.now(),
       );
       templateId = res.lastInsertRowId;
     } else {
-      await db.runAsync('UPDATE templates SET name = ?, notes = ? WHERE id = ?', t.name.trim() || 'Template', t.notes, templateId);
+      await db.runAsync(
+        'UPDATE templates SET name = ?, notes = ?, kind = ? WHERE id = ?',
+        t.name.trim() || 'Template',
+        t.notes,
+        t.kind,
+        templateId,
+      );
       await db.runAsync('DELETE FROM template_exercises WHERE template_id = ?', templateId);
     }
     for (const [i, e] of t.exercises.entries()) {
@@ -353,7 +367,7 @@ export async function deleteTemplate(db: SQLiteDatabase, id: number) {
 export async function duplicateTemplate(db: SQLiteDatabase, id: number): Promise<number | null> {
   const t = await getTemplate(db, id);
   if (!t) return null;
-  return saveTemplate(db, null, { name: `${t.name} (copy)`, notes: t.notes, exercises: t.exercises });
+  return saveTemplate(db, null, { name: `${t.name} (copy)`, notes: t.notes, kind: t.kind, exercises: t.exercises });
 }
 
 export async function markTemplateUsed(db: SQLiteDatabase, id: number, ts: number) {

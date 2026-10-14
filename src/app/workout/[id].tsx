@@ -13,7 +13,7 @@ import { formatDate, formatDuration, formatNumber, formatTime } from '@/lib/form
 import { useFocusQuery } from '@/lib/hooks';
 import { formatSet, SET_TYPE_LABEL } from '@/lib/setFormat';
 import { colors, radius, spacing } from '@/lib/theme';
-import type { Template, WorkoutDetail } from '@/lib/types';
+import { exerciseCategory, type Template, type WorkoutDetail } from '@/lib/types';
 import { formatWeight, kgToDisplay, weightUnit } from '@/lib/units';
 import { useActiveWorkout } from '@/state/ActiveWorkoutContext';
 import { useSettings } from '@/state/SettingsContext';
@@ -23,6 +23,8 @@ function asTemplate(w: WorkoutDetail): Omit<Template, 'id' | 'lastUsedAt'> {
   return {
     name: w.name,
     notes: '',
+    // A workout made up only of stretches becomes a stretch routine.
+    kind: w.exercises.length > 0 && w.exercises.every((e) => exerciseCategory(e.exercise) === 'stretching') ? 'stretch' : 'workout',
     exercises: w.exercises.map((e) => ({
       exerciseId: e.exercise.id,
       restSeconds: null,

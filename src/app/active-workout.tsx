@@ -79,6 +79,7 @@ export default function ActiveWorkoutScreen() {
             await saveTemplate(db, template.id, {
               name: template.name,
               notes: template.notes,
+              kind: template.kind,
               exercises: templateExercisesFromWorkout(workout),
             });
           }

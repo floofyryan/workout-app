@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
-import { SEED_EXERCISES } from '../data/exercises';
+import { SEED_EXERCISES, SEED_STRETCH_TEMPLATES } from '../data/exercises';
 import { FREE_EXERCISE_DB_LINKS } from '../data/freeExerciseDbMap';
 import { holdDuration, newActiveExercise, newActiveSet } from './activeWorkout';
 import { guessExercise } from './exerciseGuess';
@@ -28,6 +28,13 @@ describe('free-exercise-db links', () => {
     for (const s of SEED_EXERCISES) {
       if (s.equipment !== 'Bodyweight' || /\((Weighted|Assisted)\)/.test(s.name)) continue;
       assert.ok(s.type === 'reps' || s.type === 'duration', `${s.name} is ${s.type}`);
+    }
+  });
+
+  it('starter stretch routines only use stretches from the dataset', () => {
+    const stretches = new Set(data.filter((e) => e.category === 'stretching').map(displayName));
+    for (const t of SEED_STRETCH_TEMPLATES) {
+      for (const e of t.exercises) assert.ok(stretches.has(e.name), `${t.name}: unknown stretch "${e.name}"`);
     }
   });
 

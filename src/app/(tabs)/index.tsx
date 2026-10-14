@@ -6,9 +6,10 @@ import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ActionSheet } from '@/components/Sheets';
 import { Button, Card, SectionTitle } from '@/components/ui';
 import { deleteTemplate, duplicateTemplate, listTemplates } from '@/db/repo';
+import { formatClock } from '@/lib/format';
 import { useExerciseMap, useFocusQuery } from '@/lib/hooks';
 import { colors, spacing } from '@/lib/theme';
-import type { Template } from '@/lib/types';
+import type { Exercise, Template, TemplateKind } from '@/lib/types';
 import { useActiveWorkout } from '@/state/ActiveWorkoutContext';
 
 function daysAgo(ts: number | null): string {
@@ -44,38 +45,22 @@ export default function StartWorkoutScreen() {
       <SectionTitle>Quick start</SectionTitle>
       <Button title={workout ? 'Resume Workout' : 'Start an Empty Workout'} onPress={() => (workout ? router.push('/active-workout') : begin())} />
 
-      <SectionTitle
-        right={
-          <Button
-            title="Template"
-            icon="add"
-            small
-            variant="ghost"
-            onPress={() => router.push({ pathname: '/template/[id]', params: { id: 'new' } })}
-          />
-        }
-      >
-        My templates ({templates?.length ?? 0})
-      </SectionTitle>
-      <View style={styles.grid}>
-        {templates?.map((t) => (
-          <Card key={t.id} style={styles.templateCard} onPress={() => setSelected(t)}>
-            <Text style={styles.templateName} numberOfLines={1}>
-              {t.name}
-            </Text>
-            {t.exercises.slice(0, 5).map((e, i) => (
-              <Text key={i} style={styles.templateLine} numberOfLines={1}>
-                {e.sets.length} × {exercises.get(e.exerciseId)?.name ?? '…'}
-              </Text>
-            ))}
-            {t.exercises.length > 5 && <Text style={styles.templateLine}>+{t.exercises.length - 5} more</Text>}
-            <Text style={styles.lastUsed}>{daysAgo(t.lastUsedAt)}</Text>
-          </Card>
-        ))}
-      </View>
-      {templates?.length === 0 && (
-        <Text style={{ color: colors.muted }}>No templates yet. Create one to plan your routine.</Text>
-      )}
+      <TemplateSection
+        kind="workout"
+        title="Workout templates"
+        empty="No workout templates yet. Create one to plan your routine."
+        templates={templates}
+        exercises={exercises}
+        onSelect={setSelected}
+      />
+      <TemplateSection
+        kind="stretch"
+        title="Stretch routines"
+        empty="No stretch routines yet. Build one from the stretches in the exercise library."
+        templates={templates}
+        exercises={exercises}
+        onSelect={setSelected}
+      />
 
       <ActionSheet
         visible={!!selected}
@@ -84,9 +69,13 @@ export default function StartWorkoutScreen() {
         actions={
           selected
             ? [
-                { label: 'Start Workout', icon: 'play', onPress: () => begin(selected) },
                 {
-                  label: 'Edit Template',
+                  label: selected.kind === 'stretch' ? 'Start Stretching' : 'Start Workout',
+                  icon: 'play',
+                  onPress: () => begin(selected),
+                },
+                {
+                  label: selected.kind === 'stretch' ? 'Edit Routine' : 'Edit Template',
                   icon: 'create-outline',
                   onPress: () => router.push({ pathname: '/template/[id]', params: { id: String(selected.id) } }),
                 },
@@ -123,10 +112,67 @@ export default function StartWorkoutScreen() {
   );
 }
 
+/** One group of template cards (workouts or stretch routines) with its own "+" button. */
+function TemplateSection({
+  kind,
+  title,
+  empty,
+  templates,
+  exercises,
+  onSelect,
+}: {
+  kind: TemplateKind;
+  title: string;
+  empty: string;
+  templates: Template[] | undefined;
+  exercises: Map<number, Exercise>;
+  onSelect: (t: Template) => void;
+}) {
+  const list = (templates ?? []).filter((t) => t.kind === kind);
+  return (
+    <>
+      <SectionTitle
+        right={
+          <Button
+            title={kind === 'stretch' ? 'Routine' : 'Template'}
+            icon="add"
+            small
+            variant="ghost"
+            onPress={() => router.push({ pathname: '/template/[id]', params: { id: 'new', kind } })}
+          />
+        }
+      >
+        {title} ({list.length})
+      </SectionTitle>
+      <View style={styles.grid}>
+        {list.map((t) => (
+          <Card key={t.id} style={[styles.templateCard, kind === 'stretch' && styles.stretchCard]} onPress={() => onSelect(t)}>
+            <Text style={styles.templateName} numberOfLines={1}>
+              {t.name}
+            </Text>
+            {t.exercises.slice(0, 5).map((e, i) => (
+              <Text key={i} style={styles.templateLine} numberOfLines={1}>
+                {kind === 'stretch' && e.sets[0]?.durationS
+                  ? `${formatClock(e.sets[0].durationS)} · `
+                  : `${e.sets.length} × `}
+                {exercises.get(e.exerciseId)?.name ?? '…'}
+              </Text>
+            ))}
+            {t.exercises.length > 5 && <Text style={styles.templateLine}>+{t.exercises.length - 5} more</Text>}
+            <Text style={styles.lastUsed}>{daysAgo(t.lastUsedAt)}</Text>
+          </Card>
+        ))}
+      </View>
+      {templates && list.length === 0 && <Text style={{ color: colors.muted }}>{empty}</Text>}
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { padding: spacing.lg, paddingTop: 0, paddingBottom: spacing.xl * 2 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   templateCard: { width: '48.5%', marginBottom: spacing.md, padding: spacing.md, minHeight: 140 },
+  stretchCard: { borderColor: 'rgba(34,197,94,0.35)' },
   templateName: { color: colors.text, fontWeight: '700', fontSize: 16, marginBottom: spacing.xs },
   templateLine: { color: colors.muted, fontSize: 12, marginTop: 2 },
   lastUsed: { color: colors.faint, fontSize: 11, marginTop: 'auto', paddingTop: spacing.sm },
