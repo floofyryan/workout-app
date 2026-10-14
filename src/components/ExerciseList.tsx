@@ -5,7 +5,15 @@ import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } fr
 import { exerciseUseCounts, listExercises } from '@/db/repo';
 import { useFocusQuery } from '@/lib/hooks';
 import { colors, radius, spacing } from '@/lib/theme';
-import { BODY_PARTS, EQUIPMENT, type Exercise } from '@/lib/types';
+import {
+  BODY_PARTS,
+  EQUIPMENT,
+  EXERCISE_CATEGORIES,
+  EXERCISE_CATEGORY_LABELS,
+  exerciseCategory,
+  type Exercise,
+  type ExerciseCategory,
+} from '@/lib/types';
 import { ExerciseThumb } from './ExerciseMedia';
 import { Chip } from './ui';
 
@@ -28,6 +36,7 @@ export function ExerciseList({
   const [query, setQuery] = useState('');
   const [bodyPart, setBodyPart] = useState<string | null>(null);
   const [equipment, setEquipment] = useState<string | null>(null);
+  const [category, setCategory] = useState<ExerciseCategory | null>(null);
   const [sort, setSort] = useState<Sort>('name');
 
   const filtered = useMemo(() => {
@@ -37,13 +46,14 @@ export function ExerciseList({
       (e) =>
         (!bodyPart || e.bodyPart === bodyPart) &&
         (!equipment || e.equipment === equipment) &&
+        (!category || exerciseCategory(e) === category) &&
         words.every((w) => e.name.toLowerCase().includes(w)),
     );
     if (sort === 'frequency') {
       list.sort((a, b) => (data.counts.get(b.id) ?? 0) - (data.counts.get(a.id) ?? 0) || a.name.localeCompare(b.name));
     }
     return list;
-  }, [data, query, bodyPart, equipment, sort]);
+  }, [data, query, bodyPart, equipment, category, sort]);
 
   return (
     <FlatList
@@ -83,12 +93,24 @@ export function ExerciseList({
               <Chip key={e} label={e} selected={equipment === e} onPress={() => setEquipment(equipment === e ? null : e)} />
             ))}
           </ScrollView>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips} keyboardShouldPersistTaps="handled">
+            <Chip label="Any type" selected={!category} onPress={() => setCategory(null)} />
+            {EXERCISE_CATEGORIES.map((c) => (
+              <Chip
+                key={c}
+                label={EXERCISE_CATEGORY_LABELS[c]}
+                selected={category === c}
+                onPress={() => setCategory(category === c ? null : c)}
+              />
+            ))}
+          </ScrollView>
         </View>
       }
       ListEmptyComponent={data ? <Text style={styles.empty}>No exercises found</Text> : null}
       renderItem={({ item }) => {
         const isSelected = selected?.has(item.id);
         const count = data?.counts.get(item.id) ?? 0;
+        const kind = exerciseCategory(item);
         return (
           <Pressable
             onPress={() => onPress(item)}
@@ -101,6 +123,7 @@ export function ExerciseList({
               </Text>
               <Text style={styles.sub} numberOfLines={1}>
                 {item.bodyPart}
+                {kind !== 'strength' && kind !== 'cardio' ? ` · ${EXERCISE_CATEGORY_LABELS[kind]}` : ''}
                 {count > 0 ? ` · ${count}×` : ''}
                 {item.isCustom ? ' · Custom' : ''}
               </Text>

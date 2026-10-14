@@ -8,6 +8,7 @@ import { FREE_EXERCISE_DB_LINKS } from '../data/freeExerciseDbMap';
 import { holdDuration, newActiveExercise, newActiveSet } from './activeWorkout';
 import { guessExercise } from './exerciseGuess';
 import { displayName, toBodyPart, toEquipment, toExerciseType, type FreeExercise } from './freeExerciseDb';
+import { exerciseCategory } from './types';
 
 const data: FreeExercise[] = JSON.parse(
   readFileSync(new URL('../data/freeExerciseDb.json', import.meta.url), 'utf8'),
@@ -60,6 +61,18 @@ describe('free-exercise-db conversion', () => {
     assert.equal(toExerciseType(base), 'weight_reps');
     assert.equal(displayName(base), 'Hammer Curl (Dumbbell)');
     assert.equal(displayName({ ...base, name: 'Dumbbell Shrug' }), 'Dumbbell Shrug');
+  });
+  it('puts Olympic lifts and strongman events under Full Body, neck work under Neck', () => {
+    assert.equal(toBodyPart({ ...base, category: 'olympic weightlifting', primaryMuscles: ['quadriceps'] }), 'Full Body');
+    assert.equal(toBodyPart({ ...base, category: 'strongman', primaryMuscles: ['forearms'] }), 'Full Body');
+    assert.equal(toBodyPart({ ...base, primaryMuscles: ['neck'] }), 'Neck');
+    assert.equal(toBodyPart({ ...base, category: 'stretching', primaryMuscles: ['hamstrings'] }), 'Hamstrings');
+  });
+  it('derives the exercise type used by the type filter', () => {
+    assert.equal(exerciseCategory({ category: 'stretching', bodyPart: 'Hamstrings' }), 'stretching');
+    assert.equal(exerciseCategory({ category: 'powerlifting', bodyPart: 'Chest' }), 'strength');
+    assert.equal(exerciseCategory({ category: null, bodyPart: 'Cardio' }), 'cardio');
+    assert.equal(exerciseCategory({ category: null, bodyPart: 'Back' }), 'strength');
   });
   it('tracks bodyweight movements as reps and stretches as time', () => {
     assert.equal(toExerciseType({ ...base, equipment: 'body only' }), 'reps');

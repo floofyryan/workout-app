@@ -21,7 +21,7 @@ import { formatClock, formatDate, formatShortDate } from '@/lib/format';
 import { useFocusQuery } from '@/lib/hooks';
 import { formatSet, SET_TYPE_LABEL } from '@/lib/setFormat';
 import { colors, radius, spacing } from '@/lib/theme';
-import { EXERCISE_TYPE_LABELS, type Exercise, type UnitSystem } from '@/lib/types';
+import { EXERCISE_CATEGORY_LABELS, EXERCISE_TYPE_LABELS, exerciseCategory, type Exercise, type UnitSystem } from '@/lib/types';
 import { clean, formatDistance, formatWeight, kgToDisplay, metresToDisplay, weightUnit } from '@/lib/units';
 import { useSettings } from '@/state/SettingsContext';
 
@@ -82,6 +82,7 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function About({ exercise, sessions }: { exercise: Exercise; sessions: number }) {
   const rows: [string, string][] = [
+    ['Type', EXERCISE_CATEGORY_LABELS[exerciseCategory(exercise)]],
     ['Body part', exercise.bodyPart],
     ['Primary muscles', exercise.primaryMuscles.map(capitalize).join(', ')],
     ['Secondary muscles', exercise.secondaryMuscles.map(capitalize).join(', ')],

@@ -45,7 +45,7 @@ const MUSCLE_MAP: Record<string, BodyPart> = {
   lats: 'Back',
   'lower back': 'Back',
   'middle back': 'Back',
-  neck: 'Other',
+  neck: 'Neck',
   quadriceps: 'Quads',
   shoulders: 'Shoulders',
   traps: 'Back',
@@ -61,6 +61,8 @@ export function toEquipment(e: FreeExercise): Equipment {
 
 export function toBodyPart(e: FreeExercise): BodyPart {
   if (e.category === 'cardio') return 'Cardio';
+  // Olympic lifts and strongman events work the whole body, whatever muscle is listed first.
+  if (e.category === 'olympic weightlifting' || e.category === 'strongman') return 'Full Body';
   return MUSCLE_MAP[e.primaryMuscles[0]] ?? 'Other';
 }
 

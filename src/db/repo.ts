@@ -195,30 +195,33 @@ export interface ExerciseInput {
   type: ExerciseType;
   notes: string;
   restSeconds: number | null;
+  category: string | null;
 }
 
 export async function createExercise(db: SQLiteDatabase, e: ExerciseInput): Promise<number> {
   const res = await db.runAsync(
-    'INSERT INTO exercises (name, equipment, body_part, type, notes, is_custom, rest_seconds) VALUES (?, ?, ?, ?, ?, 1, ?)',
+    'INSERT INTO exercises (name, equipment, body_part, type, notes, is_custom, rest_seconds, category) VALUES (?, ?, ?, ?, ?, 1, ?, ?)',
     e.name.trim(),
     e.equipment,
     e.bodyPart,
     e.type,
     e.notes,
     e.restSeconds,
+    e.category,
   );
   return res.lastInsertRowId;
 }
 
 export async function updateExercise(db: SQLiteDatabase, id: number, e: ExerciseInput) {
   await db.runAsync(
-    'UPDATE exercises SET name = ?, equipment = ?, body_part = ?, type = ?, notes = ?, rest_seconds = ? WHERE id = ?',
+    'UPDATE exercises SET name = ?, equipment = ?, body_part = ?, type = ?, notes = ?, rest_seconds = ?, category = ? WHERE id = ?',
     e.name.trim(),
     e.equipment,
     e.bodyPart,
     e.type,
     e.notes,
     e.restSeconds,
+    e.category,
     id,
   );
 }

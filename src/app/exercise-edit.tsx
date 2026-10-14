@@ -12,6 +12,9 @@ import {
   EQUIPMENT,
   EXERCISE_TYPE_LABELS,
   EXERCISE_TYPES,
+  EXERCISE_CATEGORIES,
+  EXERCISE_CATEGORY_LABELS,
+  exerciseCategory,
   type BodyPart,
   type Equipment,
   type Exercise,
@@ -28,6 +31,7 @@ export default function ExerciseEditScreen() {
   const [type, setType] = useState<ExerciseType>('weight_reps');
   const [notes, setNotes] = useState('');
   const [rest, setRest] = useState<number | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -40,6 +44,7 @@ export default function ExerciseEditScreen() {
       setType(e.type);
       setNotes(e.notes);
       setRest(e.restSeconds);
+      setCategory(e.category);
     });
   }, [db, id]);
 
@@ -53,7 +58,7 @@ export default function ExerciseEditScreen() {
     if (clash && clash.id !== existing?.id) {
       return Alert.alert('Already exists', `An exercise called "${clash.name}" already exists.`);
     }
-    const input = { name: trimmed, equipment, bodyPart, type, notes, restSeconds: rest };
+    const input = { name: trimmed, equipment, bodyPart, type, notes, restSeconds: rest, category };
     if (existing) await updateExercise(db, existing.id, input);
     else await createExercise(db, input);
     router.back();
@@ -96,6 +101,23 @@ export default function ExerciseEditScreen() {
             {BODY_PARTS.map((b) => (
               <View key={b} style={styles.chipWrap}>
                 <Chip label={b} selected={bodyPart === b} onPress={() => setBodyPart(b)} />
+              </View>
+            ))}
+          </View>
+
+          <SectionTitle>Type</SectionTitle>
+          <View style={styles.wrap}>
+            {EXERCISE_CATEGORIES.map((c) => (
+              <View key={c} style={styles.chipWrap}>
+                <Chip
+                  label={EXERCISE_CATEGORY_LABELS[c]}
+                  selected={exerciseCategory({ category, bodyPart }) === c}
+                  onPress={() => {
+                    setCategory(c);
+                    // Stretches are held for time.
+                    if (c === 'stretching') setType('duration');
+                  }}
+                />
               </View>
             ))}
           </View>

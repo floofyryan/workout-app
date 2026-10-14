@@ -26,11 +26,43 @@ export const BODY_PARTS = [
   'Glutes',
   'Calves',
   'Core',
+  'Neck',
   'Full Body',
   'Cardio',
   'Other',
 ] as const;
 export type BodyPart = (typeof BODY_PARTS)[number];
+
+/** Kind of exercise, independent of the body part it trains. */
+export const EXERCISE_CATEGORIES = [
+  'strength',
+  'stretching',
+  'cardio',
+  'plyometrics',
+  'olympic weightlifting',
+  'strongman',
+] as const;
+export type ExerciseCategory = (typeof EXERCISE_CATEGORIES)[number];
+
+export const EXERCISE_CATEGORY_LABELS: Record<ExerciseCategory, string> = {
+  strength: 'Strength',
+  stretching: 'Stretching',
+  cardio: 'Cardio',
+  plyometrics: 'Plyometrics',
+  'olympic weightlifting': 'Olympic lifting',
+  strongman: 'Strongman',
+};
+
+/**
+ * The exercise's kind. free-exercise-db's "powerlifting" entries are barbell strength variants,
+ * so they count as strength; exercises without a stored category fall back to their body part.
+ */
+export function exerciseCategory(e: { category: string | null; bodyPart: BodyPart }): ExerciseCategory {
+  if (e.category && (EXERCISE_CATEGORIES as readonly string[]).includes(e.category)) {
+    return e.category as ExerciseCategory;
+  }
+  return e.bodyPart === 'Cardio' ? 'cardio' : 'strength';
+}
 
 /** Determines which fields are tracked for each set of an exercise. */
 export const EXERCISE_TYPES = [

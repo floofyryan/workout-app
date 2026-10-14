@@ -28,7 +28,8 @@ in SQLite.
   every set, estimated 1RMs and PRs; edit, repeat, save as template, or delete it.
 - **Exercises** – ~900 exercises: a hand-curated core set of ~180 plus the rest of
   [free-exercise-db](https://github.com/yuhonas/free-exercise-db). Search, filter by body part and
-  equipment, sort by most used, create custom exercises. Each exercise has **About** (start/end
+  equipment, and type (strength, stretching, cardio, plyometrics, Olympic lifting, strongman), sort
+  by most used, create custom exercises. Each exercise has **About** (start/end
   photos, muscles, level and step-by-step instructions where available), **History**, **Charts**
   (est. 1RM, heaviest weight, volume, reps, duration, distance) and **Records** (PRs plus a 1–12
   rep-max table). Bodyweight exercises are tracked as reps only; "(Weighted)" and "(Assisted)"

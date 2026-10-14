@@ -1,10 +1,12 @@
-import type { BodyPart, Equipment, ExerciseType } from '../lib/types';
+import type { BodyPart, Equipment, ExerciseCategory, ExerciseType } from '../lib/types';
 
 export interface SeedExercise {
   name: string;
   equipment: Equipment;
   bodyPart: BodyPart;
   type: ExerciseType;
+  /** Set where the default (strength, or cardio for cardio exercises) doesn't fit. */
+  category?: ExerciseCategory;
 }
 
 type Row = [name: string, equipment: Equipment, bodyPart: BodyPart, type?: ExerciseType];
@@ -226,11 +228,24 @@ const ROWS: Row[] = [
   ['Jump Rope', 'Cardio', 'Cardio', 'duration'],
 ];
 
+// Built-ins that aren't plain strength work (cardio ones are recognised by body part).
+const CATEGORIES: Record<string, ExerciseCategory> = {
+  'Power Clean (Barbell)': 'olympic weightlifting',
+  'Clean (Barbell)': 'olympic weightlifting',
+  'Clean and Jerk (Barbell)': 'olympic weightlifting',
+  'Snatch (Barbell)': 'olympic weightlifting',
+  'Push Press (Barbell)': 'olympic weightlifting',
+  'Burpee (Bodyweight)': 'plyometrics',
+  'Box Jump (Bodyweight)': 'plyometrics',
+  'Mountain Climber (Bodyweight)': 'plyometrics',
+};
+
 export const SEED_EXERCISES: SeedExercise[] = ROWS.map(([name, equipment, bodyPart, type]) => ({
   name,
   equipment,
   bodyPart,
   type: type ?? 'weight_reps',
+  category: CATEGORIES[name],
 }));
 
 /** Example routines created on first launch so the app isn't empty. */

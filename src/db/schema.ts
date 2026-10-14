@@ -110,6 +110,24 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
       "UPDATE exercises SET type = 'reps' WHERE equipment = 'Bodyweight' AND type = 'weight_reps'",
     );
   },
+  // v3: Olympic lifts and strongman events go under Full Body, neck exercises under Neck, and
+  // unlinked built-ins get a category (strength, cardio, plyometrics…) for the type filter.
+  async (db) => {
+    const builtIn = SEED_EXERCISES.map((e) => e.name);
+    const notBuiltIn = `name NOT IN (${builtIn.map(() => '?').join(',')})`;
+    await db.runAsync(
+      `UPDATE exercises SET body_part = 'Full Body'
+       WHERE is_custom = 0 AND category IN ('olympic weightlifting', 'strongman') AND ${notBuiltIn}`,
+      builtIn,
+    );
+    await db.runAsync(
+      `UPDATE exercises SET body_part = 'Neck' WHERE is_custom = 0 AND primary_muscles LIKE '["neck"%' AND ${notBuiltIn}`,
+      builtIn,
+    );
+    for (const e of SEED_EXERCISES) {
+      if (e.category) await db.runAsync('UPDATE exercises SET category = ? WHERE name = ?', e.category, e.name);
+    }
+  },
 ];
 
 async function importFreeExerciseDb(db: SQLiteDatabase) {
