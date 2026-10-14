@@ -9,10 +9,11 @@ import { useActiveWorkout } from '@/state/ActiveWorkoutContext';
 
 /** Bar above the tab bar that returns to the workout in progress. */
 export function ActiveWorkoutBanner() {
-  const { workout, restTimer } = useActiveWorkout();
+  const { workout, restTimer, setTimer } = useActiveWorkout();
   const now = useNow(1000);
   if (!workout) return null;
   const rest = restTimer ? Math.max(0, Math.ceil((restTimer.endsAt - now) / 1000)) : null;
+  const hold = setTimer ? Math.max(0, Math.ceil((setTimer.endsAt - now) / 1000)) : null;
   return (
     <Pressable style={styles.banner} onPress={() => router.push('/active-workout')}>
       <Ionicons name="chevron-up" size={18} color={colors.text} />
@@ -23,6 +24,7 @@ export function ActiveWorkoutBanner() {
         <Text style={styles.time}>
           {formatClock((now - workout.startedAt) / 1000)}
           {rest != null ? `  ·  Rest ${formatClock(rest)}` : ''}
+          {hold != null ? `  ·  Hold ${formatClock(hold)}` : ''}
         </Text>
       </View>
     </Pressable>

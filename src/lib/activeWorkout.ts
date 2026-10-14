@@ -195,3 +195,18 @@ export function updateSetIn(
 export function updateExerciseIn(w: ActiveWorkout, key: string, patch: Partial<Omit<Ex, 'key' | 'sets'>>): ActiveWorkout {
   return mapExercise(w, key, (e) => ({ ...e, ...patch }));
 }
+
+export const DEFAULT_HOLD_SECONDS = 60;
+
+/**
+ * Countdown length for a timed set: its own target, else last session's time for that set,
+ * else the set above's, else one minute.
+ */
+export function holdDuration(ex: ActiveExercise, setIndex: number, previous: SetData[] = []): number {
+  return (
+    ex.sets[setIndex]?.durationS ??
+    previous[setIndex]?.durationS ??
+    ex.sets[setIndex - 1]?.durationS ??
+    DEFAULT_HOLD_SECONDS
+  );
+}

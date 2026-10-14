@@ -16,6 +16,7 @@ import { getExercisesByIds, getKv, getPreviousSets, markTemplateUsed, saveWorkou
 import {
   completedExercises,
   fillBlanks,
+  holdDuration,
   updateSetIn,
   workoutFromTemplate,
   type ActiveWorkout,
@@ -31,6 +32,15 @@ export interface RestTimer {
   duration: number;
 }
 
+/** Countdown for a timed set (e.g. a plank); when it ends the set is completed and rest starts. */
+export interface SetTimer {
+  exerciseKey: string;
+  setKey: string;
+  startedAt: number;
+  endsAt: number;
+  duration: number;
+}
+
 interface ActiveWorkoutContextValue {
   workout: ActiveWorkout | null;
   /** Exercise metadata for every exercise in the active workout. */
@@ -38,12 +48,18 @@ interface ActiveWorkoutContextValue {
   /** Sets from the last time each exercise was performed. */
   previous: Map<number, SetData[]>;
   restTimer: RestTimer | null;
+  setTimer: SetTimer | null;
   start: (template?: Template) => void;
   update: (fn: (w: ActiveWorkout) => ActiveWorkout) => void;
   toggleSetComplete: (exerciseKey: string, setKey: string) => void;
   startRest: (seconds: number) => void;
   adjustRest: (deltaSeconds: number) => void;
   stopRest: () => void;
+  startSetTimer: (exerciseKey: string, setKey: string) => void;
+  adjustSetTimer: (deltaSeconds: number) => void;
+  /** Ends the countdown early and records the time held so far. */
+  finishSetTimer: () => void;
+  cancelSetTimer: () => void;
   /** Saves completed sets. Returns the new workout id, or null if nothing was completed. */
   finish: () => Promise<number | null>;
   discard: () => void;
@@ -58,6 +74,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
   const [exercises, setExercises] = useState<Map<number, Exercise>>(new Map());
   const [previous, setPrevious] = useState<Map<number, SetData[]>>(new Map());
   const [restTimer, setRestTimer] = useState<RestTimer | null>(null);
+  const [setTimer, setSetTimer] = useState<SetTimer | null>(null);
   const loaded = useRef(false);
   const workoutRef = useRef<ActiveWorkout | null>(null);
   useEffect(() => {
@@ -127,6 +144,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     (template?: Template) => {
       const now = Date.now();
       setRestTimer(null);
+      setSetTimer(null);
       if (template) {
         setWorkout(workoutFromTemplate(template, now));
         markTemplateUsed(db, template.id, now);
@@ -153,12 +171,74 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
 
   const stopRest = useCallback(() => setRestTimer(null), []);
 
+  const restSecondsFor = useCallback(
+    (exerciseKey: string) => {
+      const ex = workoutRef.current?.exercises.find((e) => e.key === exerciseKey);
+      if (!ex) return settings.defaultRestSeconds;
+      return ex.restSeconds ?? exercises.get(ex.exerciseId)?.restSeconds ?? settings.defaultRestSeconds;
+    },
+    [exercises, settings.defaultRestSeconds],
+  );
+
+  /** Marks a timed set done with the time held, buzzes, and starts the rest timer. */
+  const completeTimedSet = useCallback(
+    (timer: SetTimer, seconds: number) => {
+      setSetTimer(null);
+      const ex = workoutRef.current?.exercises.find((e) => e.key === timer.exerciseKey);
+      if (!ex?.sets.some((s) => s.key === timer.setKey)) return;
+      update((cur) =>
+        updateSetIn(cur, timer.exerciseKey, timer.setKey, { durationS: Math.max(1, Math.round(seconds)), completed: true }),
+      );
+      if (settings.vibrateOnRestEnd) Vibration.vibrate([0, 300, 150, 300]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      startRest(restSecondsFor(timer.exerciseKey));
+    },
+    [restSecondsFor, settings.vibrateOnRestEnd, startRest, update],
+  );
+
+  // Set timer: complete the set when the countdown reaches zero.
+  useEffect(() => {
+    if (!setTimer) return;
+    const t = setTimeout(() => completeTimedSet(setTimer, setTimer.duration), Math.max(0, setTimer.endsAt - Date.now()));
+    return () => clearTimeout(t);
+  }, [setTimer, completeTimedSet]);
+
+  const startSetTimer = useCallback(
+    (exerciseKey: string, setKey: string) => {
+      const ex = workoutRef.current?.exercises.find((e) => e.key === exerciseKey);
+      const idx = ex?.sets.findIndex((s) => s.key === setKey) ?? -1;
+      if (!ex || idx < 0) return;
+      const duration = holdDuration(ex, idx, previous.get(ex.exerciseId));
+      const now = Date.now();
+      setRestTimer(null);
+      setSetTimer({ exerciseKey, setKey, startedAt: now, endsAt: now + duration * 1000, duration });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    },
+    [previous],
+  );
+
+  const adjustSetTimer = useCallback((delta: number) => {
+    setSetTimer((t) => {
+      if (!t) return t;
+      const duration = Math.max(1, t.duration + delta);
+      return { ...t, duration, endsAt: t.startedAt + duration * 1000 };
+    });
+  }, []);
+
+  const finishSetTimer = useCallback(() => {
+    if (setTimer) completeTimedSet(setTimer, Math.min(setTimer.duration, (Date.now() - setTimer.startedAt) / 1000));
+  }, [setTimer, completeTimedSet]);
+
+  const cancelSetTimer = useCallback(() => setSetTimer(null), []);
+
   const toggleSetComplete = useCallback(
     (exerciseKey: string, setKey: string) => {
       const w = workoutRef.current;
       const ex = w?.exercises.find((e) => e.key === exerciseKey);
       const idx = ex?.sets.findIndex((s) => s.key === setKey) ?? -1;
       if (!ex || idx < 0) return;
+      // Ticking a set that is being timed ends the countdown early.
+      if (setTimer?.setKey === setKey) return finishSetTimer();
       const set = ex.sets[idx];
       const completing = !set.completed;
       const prevSets = previous.get(ex.exerciseId) ?? [];
@@ -169,16 +249,16 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       update((cur) => updateSetIn(cur, exerciseKey, setKey, nextSet));
       if (completing) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-        const rest = ex.restSeconds ?? exercises.get(ex.exerciseId)?.restSeconds ?? settings.defaultRestSeconds;
-        startRest(rest);
+        startRest(restSecondsFor(exerciseKey));
       }
     },
-    [exercises, previous, settings.defaultRestSeconds, startRest, update],
+    [finishSetTimer, previous, restSecondsFor, setTimer, startRest, update],
   );
 
   const discard = useCallback(() => {
     setWorkout(null);
     setRestTimer(null);
+    setSetTimer(null);
   }, []);
 
   const finish = useCallback(async () => {
@@ -204,12 +284,17 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       exercises,
       previous,
       restTimer,
+      setTimer,
       start,
       update,
       toggleSetComplete,
       startRest,
       adjustRest,
       stopRest,
+      startSetTimer,
+      adjustSetTimer,
+      finishSetTimer,
+      cancelSetTimer,
       finish,
       discard,
     }),
@@ -218,12 +303,17 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       exercises,
       previous,
       restTimer,
+      setTimer,
       start,
       update,
       toggleSetComplete,
       startRest,
       adjustRest,
       stopRest,
+      startSetTimer,
+      adjustSetTimer,
+      finishSetTimer,
+      cancelSetTimer,
       finish,
       discard,
     ],

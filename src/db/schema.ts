@@ -1,6 +1,8 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { SEED_EXERCISES, SEED_TEMPLATES } from '../data/exercises';
+import { FREE_EXERCISE_DB_LINKS } from '../data/freeExerciseDbMap';
+import { displayName, toBodyPart, toEquipment, toExerciseType, type FreeExercise } from '../lib/freeExerciseDb';
 
 export const DATABASE_NAME = 'workout.db';
 
@@ -91,7 +93,83 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
     `);
     await seed(db);
   },
+  // v2: exercise images, instructions and muscles from free-exercise-db, plus its ~700 other
+  // exercises; bodyweight exercises are tracked as reps only.
+  async (db) => {
+    await db.execAsync(`
+      ALTER TABLE exercises ADD COLUMN source_id TEXT;
+      ALTER TABLE exercises ADD COLUMN images TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE exercises ADD COLUMN instructions TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE exercises ADD COLUMN primary_muscles TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE exercises ADD COLUMN secondary_muscles TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE exercises ADD COLUMN level TEXT;
+      ALTER TABLE exercises ADD COLUMN category TEXT;
+    `);
+    await importFreeExerciseDb(db);
+    await db.runAsync(
+      "UPDATE exercises SET type = 'reps' WHERE equipment = 'Bodyweight' AND type = 'weight_reps'",
+    );
+  },
 ];
+
+async function importFreeExerciseDb(db: SQLiteDatabase) {
+  // Loaded lazily: the dataset is only needed while migrating.
+  const data = (await import('../data/freeExerciseDb.json')).default as FreeExercise[];
+  const byId = new Map(data.map((e) => [e.id, e]));
+
+  const link = await db.prepareAsync(
+    `UPDATE exercises SET source_id = $id, images = $images, instructions = $instructions,
+       primary_muscles = $primary, secondary_muscles = $secondary, level = $level, category = $category
+     WHERE name = $name COLLATE NOCASE AND source_id IS NULL`,
+  );
+  const insert = await db.prepareAsync(
+    `INSERT INTO exercises (name, equipment, body_part, type, source_id, images, instructions,
+       primary_muscles, secondary_muscles, level, category)
+     VALUES ($name, $equipment, $bodyPart, $type, $id, $images, $instructions, $primary, $secondary, $level, $category)`,
+  );
+  const details = (e: FreeExercise) => ({
+    $id: e.id,
+    $images: JSON.stringify(e.images),
+    $instructions: JSON.stringify(e.instructions),
+    $primary: JSON.stringify(e.primaryMuscles),
+    $secondary: JSON.stringify(e.secondaryMuscles),
+    $level: e.level,
+    $category: e.category,
+  });
+
+  try {
+    const linked = new Set<string>();
+    for (const [name, id] of Object.entries(FREE_EXERCISE_DB_LINKS)) {
+      const e = byId.get(id);
+      if (!e) continue;
+      await link.executeAsync({ ...details(e), $name: name });
+      linked.add(id);
+    }
+    const existing = new Set(
+      (await db.getAllAsync<{ name: string }>('SELECT name FROM exercises')).map((r) => r.name.toLowerCase()),
+    );
+    for (const e of data) {
+      if (linked.has(e.id)) continue;
+      const name = displayName(e);
+      if (existing.has(name.toLowerCase())) {
+        // Same name as an existing (e.g. imported) exercise: attach the details to it instead.
+        await link.executeAsync({ ...details(e), $name: name });
+        continue;
+      }
+      existing.add(name.toLowerCase());
+      await insert.executeAsync({
+        ...details(e),
+        $name: name,
+        $equipment: toEquipment(e),
+        $bodyPart: toBodyPart(e),
+        $type: toExerciseType(e),
+      });
+    }
+  } finally {
+    await link.finalizeAsync();
+    await insert.finalizeAsync();
+  }
+}
 
 async function seed(db: SQLiteDatabase) {
   for (const e of SEED_EXERCISES) {

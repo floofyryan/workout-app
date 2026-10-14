@@ -65,6 +65,16 @@ export interface Exercise {
   isCustom: boolean;
   archived: boolean;
   restSeconds: number | null;
+  /** free-exercise-db id when linked to it (supplies images and instructions). */
+  sourceId: string | null;
+  /** Image paths relative to the free-exercise-db image base URL. */
+  images: string[];
+  /** Step-by-step instructions (empty in list queries, which skip them). */
+  instructions: string[];
+  primaryMuscles: string[];
+  secondaryMuscles: string[];
+  level: string | null;
+  category: string | null;
 }
 
 /** Values of a single set. Weight is always stored in kg, distance in metres. */

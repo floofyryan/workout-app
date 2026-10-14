@@ -7,6 +7,7 @@ import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, T
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RestTimerBar } from '@/components/RestTimerBar';
+import { SetTimerBar } from '@/components/SetTimerBar';
 import { WorkoutEditor } from '@/components/WorkoutEditor';
 import { Button } from '@/components/ui';
 import { getTemplate, saveTemplate } from '@/db/repo';
@@ -114,6 +115,7 @@ export default function ActiveWorkoutScreen() {
         </View>
         <Button title="Finish" variant="success" small onPress={onFinish} loading={saving} />
       </View>
+      <SetTimerBar />
       <RestTimerBar />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -124,6 +126,8 @@ export default function ActiveWorkoutScreen() {
             exercises={active.exercises}
             previous={active.previous}
             onToggleComplete={active.toggleSetComplete}
+            onStartTimer={active.startSetTimer}
+            timingSetKey={active.setTimer?.setKey}
             header={
               <View>
                 <TextInput

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { LineChart, type Point } from '@/components/Charts';
+import { ExerciseDemo } from '@/components/ExerciseMedia';
 import { Button, Card, EmptyState, SectionTitle } from '@/components/ui';
 import { getExercise, getExerciseHistory, type ExerciseHistoryEntry } from '@/db/repo';
 import {
@@ -30,7 +31,7 @@ type Tab = (typeof TABS)[number];
 export default function ExerciseDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { settings } = useSettings();
-  const [tab, setTab] = useState<Tab>('History');
+  const [tab, setTab] = useState<Tab | null>(null);
   const [data] = useFocusQuery(
     async (db) => ({
       exercise: await getExercise(db, Number(id)),
@@ -39,6 +40,8 @@ export default function ExerciseDetailScreen() {
     [id],
   );
   const exercise = data?.exercise;
+  // Open on History once there is some, otherwise on About (instructions and photos).
+  const activeTab: Tab = tab ?? (data && data.history.length > 0 ? 'History' : 'About');
 
   return (
     <View style={{ flex: 1 }}>
@@ -58,46 +61,68 @@ export default function ExerciseDetailScreen() {
       />
       <View style={styles.tabs}>
         {TABS.map((t) => (
-          <Pressable key={t} onPress={() => setTab(t)} style={[styles.tab, tab === t && styles.tabActive]}>
-            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>{t}</Text>
+          <Pressable key={t} onPress={() => setTab(t)} style={[styles.tab, activeTab === t && styles.tabActive]}>
+            <Text style={[styles.tabText, activeTab === t && styles.tabTextActive]}>{t}</Text>
           </Pressable>
         ))}
       </View>
       {exercise && data && (
         <ScrollView contentContainerStyle={styles.content}>
-          {tab === 'About' && <About exercise={exercise} sessions={data.history.length} />}
-          {tab === 'History' && <History exercise={exercise} history={data.history} units={settings.units} />}
-          {tab === 'Charts' && <Charts exercise={exercise} history={data.history} units={settings.units} />}
-          {tab === 'Records' && <RecordsTab exercise={exercise} history={data.history} units={settings.units} />}
+          {activeTab === 'About' && <About exercise={exercise} sessions={data.history.length} />}
+          {activeTab === 'History' && <History exercise={exercise} history={data.history} units={settings.units} />}
+          {activeTab === 'Charts' && <Charts exercise={exercise} history={data.history} units={settings.units} />}
+          {activeTab === 'Records' && <RecordsTab exercise={exercise} history={data.history} units={settings.units} />}
         </ScrollView>
       )}
     </View>
   );
 }
 
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 function About({ exercise, sessions }: { exercise: Exercise; sessions: number }) {
   const rows: [string, string][] = [
     ['Body part', exercise.bodyPart],
+    ['Primary muscles', exercise.primaryMuscles.map(capitalize).join(', ')],
+    ['Secondary muscles', exercise.secondaryMuscles.map(capitalize).join(', ')],
     ['Equipment', exercise.equipment],
+    ['Level', capitalize(exercise.level ?? '')],
     ['Tracking', EXERCISE_TYPE_LABELS[exercise.type]],
     ['Rest timer', exercise.restSeconds != null ? formatClock(exercise.restSeconds) : 'Default'],
     ['Times performed', String(sessions)],
-  ];
+  ].filter((r): r is [string, string] => r[1] !== '');
   return (
-    <Card>
-      {rows.map(([k, v]) => (
-        <View key={k} style={styles.aboutRow}>
-          <Text style={styles.muted}>{k}</Text>
-          <Text style={styles.text}>{v}</Text>
-        </View>
-      ))}
-      {exercise.notes ? (
+    <>
+      <ExerciseDemo exercise={exercise} />
+      <Card style={exercise.images.length ? { marginTop: spacing.md } : undefined}>
+        {rows.map(([k, v]) => (
+          <View key={k} style={styles.aboutRow}>
+            <Text style={styles.muted}>{k}</Text>
+            <Text style={[styles.text, styles.aboutValue]}>{v}</Text>
+          </View>
+        ))}
+        {exercise.notes ? (
+          <>
+            <Text style={[styles.muted, { marginTop: spacing.md }]}>Notes</Text>
+            <Text style={[styles.text, { marginTop: 4 }]}>{exercise.notes}</Text>
+          </>
+        ) : null}
+      </Card>
+      {exercise.instructions.length > 0 && (
         <>
-          <Text style={[styles.muted, { marginTop: spacing.md }]}>Notes</Text>
-          <Text style={[styles.text, { marginTop: 4 }]}>{exercise.notes}</Text>
+          <SectionTitle>Instructions</SectionTitle>
+          <Card>
+            {exercise.instructions.map((step, i) => (
+              <View key={i} style={styles.step}>
+                <Text style={styles.stepNo}>{i + 1}</Text>
+                <Text style={[styles.text, { flex: 1 }]}>{step}</Text>
+              </View>
+            ))}
+          </Card>
+          <Text style={styles.credit}>Photos and instructions: free-exercise-db (public domain)</Text>
         </>
-      ) : null}
-    </Card>
+      )}
+    </>
   );
 }
 
@@ -287,11 +312,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 6,
+    gap: spacing.md,
   },
+  aboutValue: { flexShrink: 1, textAlign: 'right' },
   text: { color: colors.text, fontSize: 15 },
   muted: { color: colors.muted, fontSize: 14 },
   small: { color: colors.faint, fontSize: 12 },
   cardTitle: { color: colors.text, fontWeight: '700', fontSize: 16 },
   setLine: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3 },
   setNo: { color: colors.muted, width: 24, fontWeight: '700' },
+  step: { flexDirection: 'row', gap: spacing.md, paddingVertical: 6 },
+  stepNo: { color: colors.primary, fontWeight: '700', width: 18 },
+  credit: { color: colors.faint, fontSize: 11, textAlign: 'center', marginTop: spacing.md },
 });

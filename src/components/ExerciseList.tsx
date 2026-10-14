@@ -6,6 +6,7 @@ import { exerciseUseCounts, listExercises } from '@/db/repo';
 import { useFocusQuery } from '@/lib/hooks';
 import { colors, radius, spacing } from '@/lib/theme';
 import { BODY_PARTS, EQUIPMENT, type Exercise } from '@/lib/types';
+import { ExerciseThumb } from './ExerciseMedia';
 import { Chip } from './ui';
 
 type Sort = 'name' | 'frequency';
@@ -93,9 +94,7 @@ export function ExerciseList({
             onPress={() => onPress(item)}
             style={({ pressed }) => [styles.item, isSelected && styles.itemSelected, pressed && { opacity: 0.6 }]}
           >
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{item.name[0]}</Text>
-            </View>
+            <ExerciseThumb exercise={item} />
             <View style={{ flex: 1 }}>
               <Text style={styles.name} numberOfLines={1}>
                 {item.name}
@@ -134,15 +133,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   itemSelected: { backgroundColor: 'rgba(59,130,246,0.12)' },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.cardAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: { color: colors.text, fontWeight: '700', fontSize: 16 },
   name: { color: colors.text, fontSize: 16, fontWeight: '600' },
   sub: { color: colors.muted, fontSize: 13 },
   empty: { color: colors.muted, textAlign: 'center', padding: spacing.xl },

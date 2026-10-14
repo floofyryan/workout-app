@@ -38,6 +38,8 @@ export function guessExercise(
   else if (hasDuration && !hasReps) type = 'duration';
   else if (!hasWeight && hasReps) type = 'reps';
   else type = 'weight_reps';
+  // Plain bodyweight movements are tracked as reps only.
+  if (equipment === 'Bodyweight' && type === 'weight_reps') type = 'reps';
 
   const base = name.replace(/\([^)]*\)\s*$/, '');
   let bodyPart: BodyPart = 'Other';

@@ -78,7 +78,15 @@ export default function ExerciseEditScreen() {
           <View style={styles.wrap}>
             {EQUIPMENT.map((e) => (
               <View key={e} style={styles.chipWrap}>
-                <Chip label={e} selected={equipment === e} onPress={() => setEquipment(e)} />
+                <Chip
+                  label={e}
+                  selected={equipment === e}
+                  onPress={() => {
+                    setEquipment(e);
+                    // Bodyweight movements default to reps only.
+                    if (e === 'Bodyweight' && type === 'weight_reps') setType('reps');
+                  }}
+                />
               </View>
             ))}
           </View>

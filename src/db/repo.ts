@@ -32,7 +32,28 @@ interface ExerciseRow {
   is_custom: number;
   archived: number;
   rest_seconds: number | null;
+  source_id: string | null;
+  images: string;
+  instructions?: string;
+  primary_muscles: string;
+  secondary_muscles: string;
+  level: string | null;
+  category: string | null;
 }
+
+function parseList(json: string | undefined): string[] {
+  if (!json) return [];
+  try {
+    const v = JSON.parse(json);
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+// Every exercise column except the (large) instructions, for list queries.
+const EXERCISE_LIST_COLUMNS =
+  'id, name, equipment, body_part, type, notes, is_custom, archived, rest_seconds, source_id, images, primary_muscles, secondary_muscles, level, category';
 
 function toExercise(r: ExerciseRow): Exercise {
   return {
@@ -45,6 +66,13 @@ function toExercise(r: ExerciseRow): Exercise {
     isCustom: !!r.is_custom,
     archived: !!r.archived,
     restSeconds: r.rest_seconds,
+    sourceId: r.source_id,
+    images: parseList(r.images),
+    instructions: parseList(r.instructions),
+    primaryMuscles: parseList(r.primary_muscles),
+    secondaryMuscles: parseList(r.secondary_muscles),
+    level: r.level,
+    category: r.category,
   };
 }
 
@@ -133,7 +161,7 @@ export async function saveSettings(db: SQLiteDatabase, settings: Settings) {
 
 export async function listExercises(db: SQLiteDatabase, includeArchived = false): Promise<Exercise[]> {
   const rows = await db.getAllAsync<ExerciseRow>(
-    `SELECT * FROM exercises ${includeArchived ? '' : 'WHERE archived = 0'} ORDER BY name COLLATE NOCASE`,
+    `SELECT ${EXERCISE_LIST_COLUMNS} FROM exercises ${includeArchived ? '' : 'WHERE archived = 0'} ORDER BY name COLLATE NOCASE`,
   );
   return rows.map(toExercise);
 }
@@ -148,7 +176,7 @@ export async function getExercisesByIds(db: SQLiteDatabase, ids: number[]): Prom
   if (ids.length === 0) return map;
   const unique = [...new Set(ids)];
   const rows = await db.getAllAsync<ExerciseRow>(
-    `SELECT * FROM exercises WHERE id IN (${placeholders(unique.length)})`,
+    `SELECT ${EXERCISE_LIST_COLUMNS} FROM exercises WHERE id IN (${placeholders(unique.length)})`,
     unique,
   );
   for (const r of rows) map.set(r.id, toExercise(r));

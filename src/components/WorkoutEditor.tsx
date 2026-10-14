@@ -43,6 +43,8 @@ export function WorkoutEditor({
   previous,
   mode,
   onToggleComplete,
+  onStartTimer,
+  timingSetKey,
   header,
   footer,
 }: {
@@ -52,6 +54,10 @@ export function WorkoutEditor({
   previous?: Map<number, SetData[]>;
   mode: EditorMode;
   onToggleComplete?: (exerciseKey: string, setKey: string) => void;
+  /** Starts the countdown for a timed set (live workouts only). */
+  onStartTimer?: (exerciseKey: string, setKey: string) => void;
+  /** The set whose countdown is running, if any. */
+  timingSetKey?: string | null;
   header?: ReactElement;
   footer?: ReactElement;
 }) {
@@ -184,6 +190,8 @@ export function WorkoutEditor({
           onSetMenu={(set) => openSetMenu(item, set)}
           onUpdateSet={(setKey, patch) => onChange((w) => updateSetIn(w, item.key, setKey, patch))}
           onToggleComplete={onToggleComplete ? (setKey) => onToggleComplete(item.key, setKey) : undefined}
+          onStartTimer={onStartTimer ? (setKey) => onStartTimer(item.key, setKey) : undefined}
+          timingSetKey={timingSetKey}
           onAddSet={() => onChange((w) => addSetTo(w, item.key, mode === 'edit'))}
           onNotesChange={(notes) => onChange((w) => updateExerciseIn(w, item.key, { notes }))}
         />
@@ -214,6 +222,8 @@ function ExerciseBlock({
   onSetMenu,
   onUpdateSet,
   onToggleComplete,
+  onStartTimer,
+  timingSetKey,
   onAddSet,
   onNotesChange,
 }: {
@@ -225,6 +235,8 @@ function ExerciseBlock({
   onSetMenu: (set: ActiveSet) => void;
   onUpdateSet: (setKey: string, patch: Partial<ActiveSet>) => void;
   onToggleComplete?: (setKey: string) => void;
+  onStartTimer?: (setKey: string) => void;
+  timingSetKey?: string | null;
   onAddSet: () => void;
   onNotesChange: (notes: string) => void;
 }) {
@@ -233,6 +245,8 @@ function ExerciseBlock({
   const type = exercise?.type ?? 'weight_reps';
   const wu = weightUnit(units).toUpperCase();
   const showCheck = mode === 'live';
+  // Holds like planks get a countdown button that completes the set and starts the rest timer.
+  const showTimer = mode === 'live' && type === 'duration' && !!onStartTimer;
 
   const columns: string[] = (() => {
     switch (type) {
@@ -287,6 +301,7 @@ function ExerciseBlock({
             {c}
           </Text>
         ))}
+        {showTimer && <View style={styles.colCheck} />}
         {showCheck && <View style={styles.colCheck} />}
       </View>
 
@@ -312,7 +327,15 @@ function ExerciseBlock({
         };
         const ph = (v: number | null | undefined) => (v == null ? '' : String(v));
         return (
-          <View key={set.key} style={[styles.row, styles.setRow, set.completed && showCheck && styles.completedRow]}>
+          <View
+            key={set.key}
+            style={[
+              styles.row,
+              styles.setRow,
+              set.completed && showCheck && styles.completedRow,
+              timingSetKey === set.key && styles.timingRow,
+            ]}
+          >
             <Pressable onPress={() => onSetMenu(set)} style={styles.colSet} hitSlop={4}>
               <Text style={[styles.setLabel, { color: labelColor }]}>{label}</Text>
             </Pressable>
@@ -354,6 +377,17 @@ function ExerciseBlock({
                 style={[styles.colInput, styles.input, set.completed && showCheck && styles.inputDone]}
               />
             )}
+            {showTimer && (
+              <Pressable
+                onPress={() => onStartTimer?.(set.key)}
+                disabled={set.completed || timingSetKey === set.key}
+                style={[styles.colCheck, styles.check, styles.play, (set.completed || timingSetKey === set.key) && { opacity: 0.35 }]}
+                hitSlop={6}
+                accessibilityLabel="Start set timer"
+              >
+                <Ionicons name={timingSetKey === set.key ? 'hourglass-outline' : 'play'} size={16} color={colors.primary} />
+              </Pressable>
+            )}
             {showCheck && (
               <Pressable
                 onPress={() => onToggleComplete?.(set.key)}
@@ -394,6 +428,7 @@ const styles = StyleSheet.create({
   headerText: { color: colors.muted, fontSize: 12, fontWeight: '700', textAlign: 'center' },
   setRow: { paddingVertical: 4, paddingHorizontal: 2, borderRadius: radius.sm },
   completedRow: { backgroundColor: 'rgba(34,197,94,0.18)' },
+  timingRow: { borderWidth: 1, borderColor: colors.success },
   colSet: { width: 32, alignItems: 'center' },
   colPrev: { flex: 1.5, alignItems: 'center', minWidth: 0 },
   colInput: { flex: 1, minWidth: 0 },
@@ -410,6 +445,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkDone: { backgroundColor: colors.success },
+  play: { backgroundColor: 'rgba(59,130,246,0.15)' },
   addSet: {
     marginTop: spacing.sm,
     backgroundColor: colors.cardAlt,
