@@ -37,7 +37,7 @@ const layerView = (l: Layer, key: string, onPress?: () => void) => (
   <ShapeView key={key} shape={l.shape} fill={l.fill} stroke={l.stroke} strokeWidth={l.strokeWidth} opacity={l.opacity} onPress={onPress} />
 );
 
-/** The "critter" body-map figure: a little fox-like creature flexing, with tappable muscles. */
+/** The "critter" body-map figure: a little gym goblin flexing, with tappable muscles. */
 export function CritterBody({
   side,
   scale,

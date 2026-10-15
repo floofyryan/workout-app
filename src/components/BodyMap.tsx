@@ -42,7 +42,7 @@ const FIGURE_WIDTH = 200;
 const GAP = 12;
 
 const FIGURES = [
-  { value: 'critter', label: 'Critter' },
+  { value: 'critter', label: 'Goblin' },
   { value: 'male', label: 'Male' },
   { value: 'female', label: 'Female' },
 ] as const;
