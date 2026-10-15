@@ -30,6 +30,8 @@ export default function ExercisePickerScreen() {
         }}
       />
       <ExerciseList
+        // Start with the body map folded away so the list is right there; it can be opened.
+        initialShowMap={false}
         selected={new Set(selected)}
         onPress={(e) => {
           if (isSingle) return done([e.id]);

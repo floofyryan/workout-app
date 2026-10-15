@@ -5,7 +5,7 @@ import Body, { type ExtendedBodyPart, type Slug } from 'react-native-body-highli
 import { colors, radius, spacing } from '@/lib/theme';
 import type { BodyPart } from '@/lib/types';
 import { useSettings } from '@/state/SettingsContext';
-import { CritterBody } from './CritterBody';
+import { GoblinBody } from './GoblinBody';
 import { Chip } from './ui';
 
 /** Which app body part each muscle on the anatomical figures belongs to. */
@@ -42,14 +42,14 @@ const FIGURE_WIDTH = 200;
 const GAP = 12;
 
 const FIGURES = [
-  { value: 'critter', label: 'Goblin' },
+  { value: 'goblin', label: 'Goblin' },
   { value: 'male', label: 'Male' },
   { value: 'female', label: 'Female' },
 ] as const;
 
 /**
  * Anatomical front and back figures; tapping a muscle selects its body part (tapping it again
- * clears the selection). The critter is our own (src/data/critterBody.ts); the male and
+ * clears the selection). The goblin is our own (src/data/goblinBody.ts); the male and
  * female figures come from react-native-body-highlighter (MIT).
  */
 export function BodyMap({
@@ -75,15 +75,15 @@ export function BodyMap({
     const mapped = slug ? SLUG_TO_PART[slug] : undefined;
     if (mapped) toggle(mapped);
   };
-  const figureKind = settings.bodyMapGender === 'male' || settings.bodyMapGender === 'female' ? settings.bodyMapGender : 'critter';
+  const figureKind = settings.bodyMapFigure === 'male' || settings.bodyMapFigure === 'female' ? settings.bodyMapFigure : 'goblin';
   const caption = selected
     ? `${selected}${counts ? ` · ${counts.get(selected) ?? 0} exercises` : ''}`
     : 'Tap a muscle';
 
   const figure = (side: 'front' | 'back') => (
     <View style={styles.figure}>
-      {figureKind === 'critter' ? (
-        <CritterBody
+      {figureKind === 'goblin' ? (
+        <GoblinBody
           side={side}
           scale={scale}
           highlighted={new Set(highlighted.map((h) => h.slug as string))}
@@ -127,7 +127,7 @@ export function BodyMap({
             key={f.value}
             label={f.label}
             selected={figureKind === f.value}
-            onPress={() => updateSettings({ bodyMapGender: f.value })}
+            onPress={() => updateSettings({ bodyMapFigure: f.value })}
           />
         ))}
       </View>

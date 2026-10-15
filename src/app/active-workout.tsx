@@ -80,6 +80,7 @@ export default function ActiveWorkoutScreen() {
               name: template.name,
               notes: template.notes,
               kind: template.kind,
+              folder: template.folder,
               exercises: templateExercisesFromWorkout(workout),
             });
           }

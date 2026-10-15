@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ActionSheet } from '@/components/Sheets';
+import { supersetColors } from '@/components/WorkoutEditor';
 import { Card, IconButton, Stat } from '@/components/ui';
 import { workoutVolume } from '@/components/WorkoutCard';
 import { deleteWorkout, getRecordsBefore, getWorkout, saveTemplate } from '@/db/repo';
@@ -25,11 +26,13 @@ function asTemplate(w: WorkoutDetail): Omit<Template, 'id' | 'lastUsedAt'> {
     notes: '',
     // A workout made up only of stretches becomes a stretch routine.
     kind: w.exercises.length > 0 && w.exercises.every((e) => exerciseCategory(e.exercise) === 'stretching') ? 'stretch' : 'workout',
+    folder: null,
     exercises: w.exercises.map((e) => ({
       exerciseId: e.exercise.id,
       restSeconds: null,
       notes: e.notes,
       sets: e.sets,
+      supersetGroup: e.supersetGroup,
     })),
   };
 }
@@ -66,6 +69,7 @@ export default function WorkoutDetailScreen() {
   }
   if (!w || !data) return null;
 
+  const supersetColorList = supersetColors(w.exercises.map((e) => ({ supersetId: e.supersetGroup ? String(e.supersetGroup) : null })));
   const totalPrs = [...data.prs.values()].reduce((n, l) => n + l.length, 0);
   const volume = workoutVolume(w);
 
@@ -115,12 +119,18 @@ export default function WorkoutDetailScreen() {
         <Stat label="PRs" value={String(totalPrs)} />
       </Card>
 
-      {w.exercises.map((e) => {
+      {w.exercises.map((e, index) => {
         const prs = data.prs.get(e.id) ?? [];
+        const supersetColor = supersetColorList[index];
+        const supersetStart = supersetColor != null && w.exercises[index - 1]?.supersetGroup !== e.supersetGroup;
         let n = 0;
         const showE1rm = e.exercise.type === 'weight_reps' || e.exercise.type === 'weighted_bodyweight';
         return (
-          <Card key={e.id} style={{ marginTop: spacing.md }}>
+          <Card
+            key={e.id}
+            style={[{ marginTop: spacing.md }, supersetColor ? { borderLeftWidth: 4, borderLeftColor: supersetColor } : null]}
+          >
+            {supersetStart ? <Text style={[styles.supersetTag, { color: supersetColor! }]}>SUPERSET</Text> : null}
             <Pressable onPress={() => router.push({ pathname: '/exercise/[id]', params: { id: String(e.exercise.id) } })}>
               <Text style={styles.exName}>{e.exercise.name}</Text>
             </Pressable>
@@ -209,6 +219,7 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 24, fontWeight: '700' },
   text: { color: colors.text, fontSize: 15 },
   muted: { color: colors.muted, fontSize: 14, marginTop: 2 },
+  supersetTag: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, marginBottom: 2 },
   exName: { color: colors.primary, fontSize: 16, fontWeight: '700', marginBottom: spacing.xs },
   note: { color: colors.warning, fontSize: 13, marginBottom: spacing.xs },
   setLine: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3 },

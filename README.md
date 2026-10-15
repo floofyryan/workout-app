@@ -9,20 +9,27 @@ in SQLite.
 
 - **Workout tab** – start an empty workout or start from a template. Templates are split into
   **Workout templates** and **Stretch routines** (two starter stretch routines included); cards show
-  their exercises and when they were last performed; duplicate, edit or delete them.
+  their exercises and when they were last performed; duplicate, edit or delete them, group them into
+  **folders** (e.g. "PPL", "Mobility") and drag them into any order.
 - **Live workout** – elapsed timer, editable name and notes, and per exercise a
   `SET | PREVIOUS | KG | REPS | ✓` grid:
   - "Previous" shows what you did last time; tap it to copy those values. Ticking a set with blank
     fields fills them from last time (or the set above).
   - Set types: normal, warm-up (W), drop (D), failure (F) — tap the set number.
-  - Auto-generated warm-up sets, per-exercise notes, replace / reorder / remove exercises.
+  - Auto-generated warm-up sets, per-exercise notes, replace / remove exercises, and drag-to-reorder
+    them. Swipe a set left to delete it.
+  - **Supersets** – link an exercise with the next one ("Superset with …" in its menu); the rest
+    timer only starts after the last exercise of each round.
   - Rest timer starts when you tick a set (±15 s, skip, vibrates when done). Rest time is
     configurable per exercise, per template exercise, or globally.
   - Timed holds (plank, wall sit, stretches…) get a ▶ button: it counts down the set's time
     (or last session's, or 1:00), buzzes, ticks the set off and starts the rest timer
     automatically. ±15 s, Done (records the time held so far) and Cancel while it runs.
+  - With the screen off or the app in the background, a notification tells you when a hold or rest
+    is over (can be turned off in Settings).
   - The workout survives the app being closed, and keeps the screen on (configurable).
   - Finishing offers to update the template if you changed exercises or set counts.
+  - The template and past-workout editors ask before throwing away unsaved changes.
 - **Tracking types** – weight & reps, reps only, weighted bodyweight (+kg), assisted bodyweight
   (−kg), duration, distance & duration.
 - **History** – workouts grouped by month with "Exercise | Best set" summaries; open one to see
@@ -71,7 +78,8 @@ npx eas-cli@latest build -p android --profile production # .aab for the Play Sto
 ```bash
 npm run typecheck   # tsc
 npm run lint        # expo lint
-npm test            # unit tests for calculations, CSV import/export and workout editing
+npm test            # unit tests: calculations, CSV import/export, workout editing, and the
+                    # database (migrations + queries on an in-memory node:sqlite database)
 ```
 
 ### Project layout
@@ -84,7 +92,7 @@ src/app/            Expo Router screens (files are routes)
   template/[id]     Template editor ("new" to create)
   exercise/[id]     Exercise About / History / Charts / Records
 src/components/     Shared UI (WorkoutEditor set grid, charts, sheets, inputs)
-src/db/             SQLite schema/migrations (schema.ts) and queries (repo.ts)
+src/db/             SQLite schema/migrations (schema.ts), queries (repo.ts), test database (testDb.ts)
 src/state/          Settings and active-workout React contexts
 src/lib/            Pure logic: calculations, formatting, units, CSV import/export
 src/data/           Built-in exercise library, starter templates, free-exercise-db copy and links
@@ -101,6 +109,6 @@ Exercise photos and instructions come from
 domain under the Unlicense. The JSON is bundled with the app (refresh it with
 `node scripts/build-free-exercise-db.mjs`); photos are loaded from GitHub and cached on the device.
 
-The goblin body map figure is drawn for this app (`src/data/critterBody.ts`). The male and
+The goblin body map figure is drawn for this app (`src/data/goblinBody.ts`). The male and
 female figures come from
 [react-native-body-highlighter](https://github.com/HichamELBSI/react-native-body-highlighter) (MIT).

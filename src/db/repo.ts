@@ -140,7 +140,8 @@ export const DEFAULT_SETTINGS: Settings = {
   plates: [25, 20, 15, 10, 5, 2.5, 1.25],
   vibrateOnRestEnd: true,
   keepScreenOn: true,
-  bodyMapGender: 'critter',
+  timerNotifications: true,
+  bodyMapFigure: 'goblin',
 };
 
 export const DEFAULT_IMPERIAL_PLATES = [45, 35, 25, 10, 5, 2.5];
@@ -251,6 +252,7 @@ interface TemplateRow {
   name: string;
   notes: string;
   kind: string;
+  folder: string | null;
   last_used_at: number | null;
 }
 
@@ -262,6 +264,7 @@ interface TemplateExerciseRow {
   rest_seconds: number | null;
   notes: string;
   sets_json: string;
+  superset_group: number | null;
 }
 
 function parseSets(json: string): SetData[] {
@@ -279,7 +282,13 @@ export async function listTemplates(db: SQLiteDatabase): Promise<Template[]> {
   const byTemplate = new Map<number, TemplateExercise[]>();
   for (const r of exRows) {
     const list = byTemplate.get(r.template_id) ?? [];
-    list.push({ exerciseId: r.exercise_id, restSeconds: r.rest_seconds, notes: r.notes, sets: parseSets(r.sets_json) });
+    list.push({
+      exerciseId: r.exercise_id,
+      restSeconds: r.rest_seconds,
+      notes: r.notes,
+      sets: parseSets(r.sets_json),
+      supersetGroup: r.superset_group,
+    });
     byTemplate.set(r.template_id, list);
   }
   return rows.map((r) => ({
@@ -287,6 +296,7 @@ export async function listTemplates(db: SQLiteDatabase): Promise<Template[]> {
     name: r.name,
     notes: r.notes,
     kind: toKind(r.kind),
+    folder: r.folder,
     lastUsedAt: r.last_used_at,
     exercises: byTemplate.get(r.id) ?? [],
   }));
@@ -304,12 +314,14 @@ export async function getTemplate(db: SQLiteDatabase, id: number): Promise<Templ
     name: r.name,
     notes: r.notes,
     kind: toKind(r.kind),
+    folder: r.folder,
     lastUsedAt: r.last_used_at,
     exercises: exRows.map((e) => ({
       exerciseId: e.exercise_id,
       restSeconds: e.rest_seconds,
       notes: e.notes,
       sets: parseSets(e.sets_json),
+      supersetGroup: e.superset_group,
     })),
   };
 }
@@ -318,6 +330,7 @@ export interface TemplateInput {
   name: string;
   notes: string;
   kind: TemplateKind;
+  folder?: string | null;
   exercises: TemplateExercise[];
 }
 
@@ -328,33 +341,36 @@ export async function saveTemplate(db: SQLiteDatabase, id: number | null, t: Tem
     if (templateId == null) {
       const pos = await db.getFirstAsync<{ p: number | null }>('SELECT MAX(position) AS p FROM templates');
       const res = await db.runAsync(
-        'INSERT INTO templates (name, notes, kind, position, created_at) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO templates (name, notes, kind, folder, position, created_at) VALUES (?, ?, ?, ?, ?, ?)',
         t.name.trim() || 'New Template',
         t.notes,
         t.kind,
+        cleanFolder(t.folder),
         (pos?.p ?? -1) + 1,
         Date.now(),
       );
       templateId = res.lastInsertRowId;
     } else {
       await db.runAsync(
-        'UPDATE templates SET name = ?, notes = ?, kind = ? WHERE id = ?',
+        'UPDATE templates SET name = ?, notes = ?, kind = ?, folder = ? WHERE id = ?',
         t.name.trim() || 'Template',
         t.notes,
         t.kind,
+        cleanFolder(t.folder),
         templateId,
       );
       await db.runAsync('DELETE FROM template_exercises WHERE template_id = ?', templateId);
     }
     for (const [i, e] of t.exercises.entries()) {
       await db.runAsync(
-        'INSERT INTO template_exercises (template_id, exercise_id, position, rest_seconds, notes, sets_json) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO template_exercises (template_id, exercise_id, position, rest_seconds, notes, sets_json, superset_group) VALUES (?, ?, ?, ?, ?, ?, ?)',
         templateId,
         e.exerciseId,
         i,
         e.restSeconds,
         e.notes,
         JSON.stringify(e.sets),
+        e.supersetGroup ?? null,
       );
     }
   });
@@ -368,7 +384,20 @@ export async function deleteTemplate(db: SQLiteDatabase, id: number) {
 export async function duplicateTemplate(db: SQLiteDatabase, id: number): Promise<number | null> {
   const t = await getTemplate(db, id);
   if (!t) return null;
-  return saveTemplate(db, null, { name: `${t.name} (copy)`, notes: t.notes, kind: t.kind, exercises: t.exercises });
+  return saveTemplate(db, null, { name: `${t.name} (copy)`, notes: t.notes, kind: t.kind, folder: t.folder, exercises: t.exercises });
+}
+
+const cleanFolder = (folder: string | null | undefined) => folder?.trim() || null;
+
+export async function setTemplateFolder(db: SQLiteDatabase, id: number, folder: string | null) {
+  await db.runAsync('UPDATE templates SET folder = ? WHERE id = ?', cleanFolder(folder), id);
+}
+
+/** Saves a new order for templates (ids in display order). */
+export async function reorderTemplates(db: SQLiteDatabase, ids: number[]) {
+  await db.withTransactionAsync(async () => {
+    for (const [i, id] of ids.entries()) await db.runAsync('UPDATE templates SET position = ? WHERE id = ?', i, id);
+  });
 }
 
 export async function markTemplateUsed(db: SQLiteDatabase, id: number, ts: number) {
@@ -383,17 +412,18 @@ export interface WorkoutInput {
   startedAt: number;
   endedAt: number;
   templateId: number | null;
-  exercises: { exerciseId: number; notes: string; sets: SetData[] }[];
+  exercises: { exerciseId: number; notes: string; sets: SetData[]; supersetGroup?: number | null }[];
 }
 
 async function insertWorkoutExercises(db: SQLiteDatabase, workoutId: number, exercises: WorkoutInput['exercises']) {
   for (const [i, e] of exercises.entries()) {
     const we = await db.runAsync(
-      'INSERT INTO workout_exercises (workout_id, exercise_id, position, notes) VALUES (?, ?, ?, ?)',
+      'INSERT INTO workout_exercises (workout_id, exercise_id, position, notes, superset_group) VALUES (?, ?, ?, ?, ?)',
       workoutId,
       e.exerciseId,
       i,
       e.notes,
+      e.supersetGroup ?? null,
     );
     for (const [j, s] of e.sets.entries()) {
       await db.runAsync(
@@ -450,8 +480,14 @@ export async function deleteWorkout(db: SQLiteDatabase, id: number) {
 async function hydrateWorkouts(db: SQLiteDatabase, rows: WorkoutRow[]): Promise<WorkoutDetail[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-  const exRows = await db.getAllAsync<{ id: number; workout_id: number; exercise_id: number; notes: string }>(
-    `SELECT id, workout_id, exercise_id, notes FROM workout_exercises WHERE workout_id IN (${placeholders(ids.length)}) ORDER BY workout_id, position`,
+  const exRows = await db.getAllAsync<{
+    id: number;
+    workout_id: number;
+    exercise_id: number;
+    notes: string;
+    superset_group: number | null;
+  }>(
+    `SELECT id, workout_id, exercise_id, notes, superset_group FROM workout_exercises WHERE workout_id IN (${placeholders(ids.length)}) ORDER BY workout_id, position`,
     ids,
   );
   const weIds = exRows.map((r) => r.id);
@@ -477,7 +513,7 @@ async function hydrateWorkouts(db: SQLiteDatabase, rows: WorkoutRow[]): Promise<
     const exercise = exercises.get(r.exercise_id);
     if (!exercise) continue;
     const list = exByWorkout.get(r.workout_id) ?? [];
-    list.push({ id: r.id, exercise, notes: r.notes, sets: setsByWe.get(r.id) ?? [] });
+    list.push({ id: r.id, exercise, notes: r.notes, sets: setsByWe.get(r.id) ?? [], supersetGroup: r.superset_group });
     exByWorkout.set(r.workout_id, list);
   }
   return rows.map((r) => ({ ...toWorkoutSummary(r), exercises: exByWorkout.get(r.id) ?? [] }));

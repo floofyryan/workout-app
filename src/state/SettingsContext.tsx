@@ -7,6 +7,8 @@ import type { Settings } from '@/lib/types';
 interface SettingsContextValue {
   settings: Settings;
   updateSettings: (patch: Partial<Settings>) => void;
+  /** Re-reads settings from the database (e.g. after restoring a backup). */
+  reloadSettings: () => Promise<Settings>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -37,7 +39,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [db],
   );
 
-  const value = useMemo(() => ({ settings, updateSettings }), [settings, updateSettings]);
+  const reloadSettings = useCallback(async () => {
+    const s = await getSettings(db);
+    setSettings(s);
+    return s;
+  }, [db]);
+
+  const value = useMemo(() => ({ settings, updateSettings, reloadSettings }), [settings, updateSettings, reloadSettings]);
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }
 

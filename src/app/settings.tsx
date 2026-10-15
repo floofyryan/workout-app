@@ -11,6 +11,7 @@ import { parseStrongCsv, workoutsToStrongCsv } from '@/lib/strongCsv';
 import { colors, radius, spacing } from '@/lib/theme';
 import type { UnitSystem } from '@/lib/types';
 import { weightUnit } from '@/lib/units';
+import { useActiveWorkout } from '@/state/ActiveWorkoutContext';
 import { useSettings } from '@/state/SettingsContext';
 
 const REST_OPTIONS = [30, 60, 90, 120, 150, 180, 240, 300];
@@ -32,7 +33,8 @@ function askUnits(): Promise<UnitSystem | null> {
 
 export default function SettingsScreen() {
   const db = useSQLiteContext();
-  const { settings, updateSettings } = useSettings();
+  const { settings, updateSettings, reloadSettings } = useSettings();
+  const { reloadFromStorage } = useActiveWorkout();
   const [platesText, setPlatesText] = useState(settings.plates.join(', '));
   const [busy, setBusy] = useState<string | null>(null);
   const wu = weightUnit(settings.units);
@@ -90,7 +92,10 @@ export default function SettingsScreen() {
             const text = await pickTextFile(['application/json', '*/*']);
             if (text == null) return;
             await restoreBackup(db, text);
-            Alert.alert('Restored', 'Restart the app to reload settings and templates.');
+            const restored = await reloadSettings();
+            setPlatesText(restored.plates.join(', '));
+            await reloadFromStorage();
+            Alert.alert('Restored', 'Your workouts, templates, exercises and settings have been restored.');
           }),
       },
     ]);
@@ -136,6 +141,10 @@ export default function SettingsScreen() {
         <View style={styles.switchRow}>
           <Text style={styles.text}>Keep screen on during workouts</Text>
           <Switch value={settings.keepScreenOn} onValueChange={(v) => updateSettings({ keepScreenOn: v })} />
+        </View>
+        <View style={styles.switchRow}>
+          <Text style={[styles.text, { flex: 1, marginRight: spacing.md }]}>Timer alerts when the screen is off</Text>
+          <Switch value={settings.timerNotifications} onValueChange={(v) => updateSettings({ timerNotifications: v })} />
         </View>
       </Card>
 

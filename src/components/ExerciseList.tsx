@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { exerciseUseCounts, listExercises } from '@/db/repo';
@@ -26,10 +26,13 @@ export function ExerciseList({
   selected,
   onPress,
   header,
+  initialShowMap = true,
 }: {
   selected?: Set<number>;
   onPress: (e: Exercise) => void;
   header?: React.ReactElement;
+  /** Whether the body map starts open (it can be toggled either way). */
+  initialShowMap?: boolean;
 }) {
   const [data] = useFocusQuery(async (db) => ({
     exercises: await listExercises(db),
@@ -37,7 +40,18 @@ export function ExerciseList({
   }));
   const [query, setQuery] = useState('');
   const [bodyPart, setBodyPart] = useState<BodyPart | null>(null);
-  const [showMap, setShowMap] = useState(true);
+  const [showMap, setShowMap] = useState(initialShowMap);
+  const listRef = useRef<FlatList<Exercise>>(null);
+  // Where the filter chips start, so picking a muscle can scroll the results into view. Worked out
+  // from heights because web only reports layout when a size changes, not when something moves.
+  const heights = useRef({ header: 0, filters: 0 });
+  const selectFromMap = (part: BodyPart | null) => {
+    setBodyPart(part);
+    if (part) {
+      const offset = heights.current.header - heights.current.filters;
+      requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset, animated: true }));
+    }
+  };
   const [equipment, setEquipment] = useState<string | null>(null);
   const [category, setCategory] = useState<ExerciseCategory | null>(null);
   const [sort, setSort] = useState<Sort>('name');
@@ -71,12 +85,13 @@ export function ExerciseList({
 
   return (
     <FlatList
+      ref={listRef}
       data={filtered}
       keyExtractor={(e) => String(e.id)}
       keyboardShouldPersistTaps="handled"
       initialNumToRender={20}
       ListHeaderComponent={
-        <View>
+        <View onLayout={(e) => (heights.current.header = e.nativeEvent.layout.height)}>
           {header}
           <View style={styles.search}>
             <Ionicons name="search" size={18} color={colors.muted} />
@@ -103,31 +118,62 @@ export function ExerciseList({
               <Text style={[styles.mapToggleText, showMap && { color: '#fff' }]}>Body map</Text>
             </Pressable>
           </View>
-          {showMap && <BodyMap selected={bodyPart} onSelect={setBodyPart} counts={partCounts} />}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips} keyboardShouldPersistTaps="handled">
-            <Chip label={sort === 'name' ? 'A–Z' : 'Most used'} selected onPress={() => setSort(sort === 'name' ? 'frequency' : 'name')} />
-            <Chip label="Any body part" selected={!bodyPart} onPress={() => setBodyPart(null)} />
-            {BODY_PARTS.map((b) => (
-              <Chip key={b} label={b} selected={bodyPart === b} onPress={() => setBodyPart(bodyPart === b ? null : b)} />
-            ))}
-          </ScrollView>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips} keyboardShouldPersistTaps="handled">
-            <Chip label="Any equipment" selected={!equipment} onPress={() => setEquipment(null)} />
-            {EQUIPMENT.map((e) => (
-              <Chip key={e} label={e} selected={equipment === e} onPress={() => setEquipment(equipment === e ? null : e)} />
-            ))}
-          </ScrollView>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips} keyboardShouldPersistTaps="handled">
-            <Chip label="Any type" selected={!category} onPress={() => setCategory(null)} />
-            {EXERCISE_CATEGORIES.map((c) => (
+          {showMap && <BodyMap selected={bodyPart} onSelect={selectFromMap} counts={partCounts} />}
+          <View onLayout={(e) => (heights.current.filters = e.nativeEvent.layout.height)}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.chips}
+              keyboardShouldPersistTaps="handled"
+            >
               <Chip
-                key={c}
-                label={EXERCISE_CATEGORY_LABELS[c]}
-                selected={category === c}
-                onPress={() => setCategory(category === c ? null : c)}
+                label={sort === 'name' ? 'A–Z' : 'Most used'}
+                selected
+                onPress={() => setSort(sort === 'name' ? 'frequency' : 'name')}
               />
-            ))}
-          </ScrollView>
+              <Chip label="Any body part" selected={!bodyPart} onPress={() => setBodyPart(null)} />
+              {BODY_PARTS.map((b) => (
+                <Chip
+                  key={b}
+                  label={b}
+                  selected={bodyPart === b}
+                  onPress={() => setBodyPart(bodyPart === b ? null : b)}
+                />
+              ))}
+            </ScrollView>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.chips}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Chip label="Any equipment" selected={!equipment} onPress={() => setEquipment(null)} />
+              {EQUIPMENT.map((e) => (
+                <Chip
+                  key={e}
+                  label={e}
+                  selected={equipment === e}
+                  onPress={() => setEquipment(equipment === e ? null : e)}
+                />
+              ))}
+            </ScrollView>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.chips}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Chip label="Any type" selected={!category} onPress={() => setCategory(null)} />
+              {EXERCISE_CATEGORIES.map((c) => (
+                <Chip
+                  key={c}
+                  label={EXERCISE_CATEGORY_LABELS[c]}
+                  selected={category === c}
+                  onPress={() => setCategory(category === c ? null : c)}
+                />
+              ))}
+            </ScrollView>
+          </View>
         </View>
       }
       ListEmptyComponent={data ? <Text style={styles.empty}>No exercises found</Text> : null}
@@ -182,7 +228,14 @@ const styles = StyleSheet.create({
   },
   mapToggleOn: { backgroundColor: colors.primary },
   mapToggleText: { color: colors.primary, fontSize: 12, fontWeight: '700' },
-  searchInput: { flex: 1, minWidth: 0, color: colors.text, paddingVertical: 10, paddingHorizontal: spacing.sm, fontSize: 16 },
+  searchInput: {
+    flex: 1,
+    minWidth: 0,
+    color: colors.text,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.sm,
+    fontSize: 16,
+  },
   chips: { paddingHorizontal: spacing.lg, marginTop: spacing.sm, flexGrow: 0 },
   item: {
     flexDirection: 'row',

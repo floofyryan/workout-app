@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useSQLiteContext, type SQLiteDatabase } from 'expo-sqlite';
 import {
   createContext,
   useCallback,
@@ -16,12 +16,14 @@ import { getExercisesByIds, getKv, getPreviousSets, markTemplateUsed, saveWorkou
 import {
   completedExercises,
   fillBlanks,
+  shouldRestAfter,
   holdDuration,
   updateSetIn,
   workoutFromTemplate,
   type ActiveWorkout,
 } from '@/lib/activeWorkout';
 import { defaultWorkoutName } from '@/lib/format';
+import { cancelTimerNotification, scheduleTimerNotification } from '@/lib/timerNotifications';
 import type { Exercise, SetData, Template } from '@/lib/types';
 import { useSettings } from './SettingsContext';
 
@@ -63,6 +65,18 @@ interface ActiveWorkoutContextValue {
   /** Saves completed sets. Returns the new workout id, or null if nothing was completed. */
   finish: () => Promise<number | null>;
   discard: () => void;
+  /** Re-reads the in-progress workout from the database (e.g. after restoring a backup). */
+  reloadFromStorage: () => Promise<void>;
+}
+
+async function readStoredWorkout(db: SQLiteDatabase): Promise<ActiveWorkout | null> {
+  const raw = await getKv(db, STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null; // Corrupt state: drop it.
+  }
 }
 
 const ActiveWorkoutContext = createContext<ActiveWorkoutContextValue | null>(null);
@@ -83,16 +97,16 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
 
   // Restore an in-progress workout after the app was closed.
   useEffect(() => {
-    getKv(db, STORAGE_KEY).then((raw) => {
-      if (raw) {
-        try {
-          setWorkout(JSON.parse(raw));
-        } catch {
-          // Corrupt state: drop it.
-        }
-      }
+    readStoredWorkout(db).then((w) => {
+      setWorkout(w);
       loaded.current = true;
     });
+  }, [db]);
+
+  const reloadFromStorage = useCallback(async () => {
+    loaded.current = false;
+    setWorkout(await readStoredWorkout(db));
+    loaded.current = true;
   }, [db]);
 
   // Persist the active workout (debounced) so it survives the app being killed.
@@ -124,17 +138,45 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     };
   }, [db, exerciseIdsKey]);
 
-  // Rest timer: buzz when it runs out.
+  // ---------- Background notifications for the timers ----------
+  // Rest: { endsAt, id }. Hold: the hold-finished notification's id.
+  const restNotif = useRef<{ endsAt: number; id: Promise<string | null> } | null>(null);
+  const holdNotif = useRef<Promise<string | null> | null>(null);
+  const notificationsOn = settings.timerNotifications;
+
+  const cancelRestNotification = useCallback(() => {
+    cancelTimerNotification(restNotif.current?.id);
+    restNotif.current = null;
+  }, []);
+  const cancelHoldNotification = useCallback(() => {
+    cancelTimerNotification(holdNotif.current);
+    holdNotif.current = null;
+  }, []);
+  // Rest timer: buzz when it runs out. If the app was in the background when it ended (the
+  // timeout fires late), the scheduled notification already buzzed, so don't buzz again.
   useEffect(() => {
     if (!restTimer) return;
     const ms = restTimer.endsAt - Date.now();
     const t = setTimeout(() => {
       setRestTimer(null);
+      restNotif.current = null;
+      if (Date.now() - restTimer.endsAt > 2000) return;
       if (settings.vibrateOnRestEnd) Vibration.vibrate([0, 400, 200, 400]);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     }, Math.max(0, ms));
     return () => clearTimeout(t);
   }, [restTimer, settings.vibrateOnRestEnd]);
+
+  /** Schedules the "rest over" notification, keeping one already scheduled for the same moment. */
+  const scheduleRestNotification = useCallback(
+    (endsAt: number) => {
+      if (restNotif.current?.endsAt === endsAt) return;
+      cancelRestNotification();
+      if (!notificationsOn) return;
+      restNotif.current = { endsAt, id: scheduleTimerNotification(endsAt, 'Rest over', 'Time for your next set.') };
+    },
+    [cancelRestNotification, notificationsOn],
+  );
 
   const update = useCallback((fn: (w: ActiveWorkout) => ActiveWorkout) => {
     setWorkout((w) => (w ? fn(w) : w));
@@ -145,6 +187,8 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       const now = Date.now();
       setRestTimer(null);
       setSetTimer(null);
+      cancelRestNotification();
+      cancelHoldNotification();
       if (template) {
         setWorkout(workoutFromTemplate(template, now));
         markTemplateUsed(db, template.id, now);
@@ -152,24 +196,46 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         setWorkout({ name: defaultWorkoutName(now), notes: '', startedAt: now, templateId: null, exercises: [] });
       }
     },
-    [db],
+    [db, cancelHoldNotification, cancelRestNotification],
   );
 
-  const startRest = useCallback((seconds: number) => {
-    if (seconds <= 0) return;
-    setRestTimer({ endsAt: Date.now() + seconds * 1000, duration: seconds });
-  }, []);
+  const restTimerRef = useRef<RestTimer | null>(null);
+  useEffect(() => {
+    restTimerRef.current = restTimer;
+  }, [restTimer]);
 
-  const adjustRest = useCallback((delta: number) => {
-    setRestTimer((t) => {
-      if (!t) return t;
+  /** Starts a rest of `seconds`, counted from `from` (defaults to now). */
+  const startRest = useCallback(
+    (seconds: number, from = Date.now()) => {
+      if (seconds <= 0) return;
+      const endsAt = from + seconds * 1000;
+      if (endsAt <= Date.now()) return;
+      setRestTimer({ endsAt, duration: seconds });
+      scheduleRestNotification(endsAt);
+    },
+    [scheduleRestNotification],
+  );
+
+  const adjustRest = useCallback(
+    (delta: number) => {
+      const t = restTimerRef.current;
+      if (!t) return;
       const endsAt = t.endsAt + delta * 1000;
-      if (endsAt <= Date.now()) return null;
-      return { endsAt, duration: Math.max(1, t.duration + delta) };
-    });
-  }, []);
+      if (endsAt <= Date.now()) {
+        setRestTimer(null);
+        cancelRestNotification();
+        return;
+      }
+      setRestTimer({ endsAt, duration: Math.max(1, t.duration + delta) });
+      scheduleRestNotification(endsAt);
+    },
+    [cancelRestNotification, scheduleRestNotification],
+  );
 
-  const stopRest = useCallback(() => setRestTimer(null), []);
+  const stopRest = useCallback(() => {
+    setRestTimer(null);
+    cancelRestNotification();
+  }, [cancelRestNotification]);
 
   const restSecondsFor = useCallback(
     (exerciseKey: string) => {
@@ -180,26 +246,57 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     [exercises, settings.defaultRestSeconds],
   );
 
-  /** Marks a timed set done with the time held, buzzes, and starts the rest timer. */
+  /**
+   * Marks a timed set done with the time held, buzzes, and starts the rest timer. When the
+   * countdown ran out (`natural`), rest is counted from the moment it ended, so it lines up with
+   * the notifications even if the app was in the background.
+   */
   const completeTimedSet = useCallback(
-    (timer: SetTimer, seconds: number) => {
+    (timer: SetTimer, seconds: number, natural: boolean) => {
       setSetTimer(null);
+      cancelHoldNotification();
       const ex = workoutRef.current?.exercises.find((e) => e.key === timer.exerciseKey);
-      if (!ex?.sets.some((s) => s.key === timer.setKey)) return;
+      if (!ex?.sets.some((s) => s.key === timer.setKey)) {
+        cancelRestNotification();
+        return;
+      }
       update((cur) =>
         updateSetIn(cur, timer.exerciseKey, timer.setKey, { durationS: Math.max(1, Math.round(seconds)), completed: true }),
       );
-      if (settings.vibrateOnRestEnd) Vibration.vibrate([0, 300, 150, 300]);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      startRest(restSecondsFor(timer.exerciseKey));
+      if (!natural || Date.now() - timer.endsAt < 2000) {
+        if (settings.vibrateOnRestEnd) Vibration.vibrate([0, 300, 150, 300]);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      }
+      if (shouldRestAfter(workoutRef.current, timer.exerciseKey)) {
+        startRest(restSecondsFor(timer.exerciseKey), natural ? timer.endsAt : Date.now());
+      } else {
+        cancelRestNotification();
+      }
     },
-    [restSecondsFor, settings.vibrateOnRestEnd, startRest, update],
+    [cancelHoldNotification, cancelRestNotification, restSecondsFor, settings.vibrateOnRestEnd, startRest, update],
+  );
+
+  /** Schedules the hold-finished notification and the rest-over one that follows it. */
+  const scheduleHoldNotifications = useCallback(
+    (timer: SetTimer) => {
+      cancelHoldNotification();
+      cancelRestNotification();
+      if (!notificationsOn) return;
+      const ex = workoutRef.current?.exercises.find((e) => e.key === timer.exerciseKey);
+      const name = (ex && exercises.get(ex.exerciseId)?.name) ?? 'Hold';
+      holdNotif.current = scheduleTimerNotification(timer.endsAt, `${name} done`, 'Nice hold! Rest timer started.');
+      if (shouldRestAfter(workoutRef.current, timer.exerciseKey)) {
+        const rest = restSecondsFor(timer.exerciseKey);
+        if (rest > 0) scheduleRestNotification(timer.endsAt + rest * 1000);
+      }
+    },
+    [cancelHoldNotification, cancelRestNotification, exercises, notificationsOn, restSecondsFor, scheduleRestNotification],
   );
 
   // Set timer: complete the set when the countdown reaches zero.
   useEffect(() => {
     if (!setTimer) return;
-    const t = setTimeout(() => completeTimedSet(setTimer, setTimer.duration), Math.max(0, setTimer.endsAt - Date.now()));
+    const t = setTimeout(() => completeTimedSet(setTimer, setTimer.duration, true), Math.max(0, setTimer.endsAt - Date.now()));
     return () => clearTimeout(t);
   }, [setTimer, completeTimedSet]);
 
@@ -210,26 +307,36 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       if (!ex || idx < 0) return;
       const duration = holdDuration(ex, idx, previous.get(ex.exerciseId));
       const now = Date.now();
+      const timer = { exerciseKey, setKey, startedAt: now, endsAt: now + duration * 1000, duration };
       setRestTimer(null);
-      setSetTimer({ exerciseKey, setKey, startedAt: now, endsAt: now + duration * 1000, duration });
+      setSetTimer(timer);
+      scheduleHoldNotifications(timer);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     },
-    [previous],
+    [previous, scheduleHoldNotifications],
   );
 
-  const adjustSetTimer = useCallback((delta: number) => {
-    setSetTimer((t) => {
-      if (!t) return t;
+  const adjustSetTimer = useCallback(
+    (delta: number) => {
+      const t = setTimer;
+      if (!t) return;
       const duration = Math.max(1, t.duration + delta);
-      return { ...t, duration, endsAt: t.startedAt + duration * 1000 };
-    });
-  }, []);
+      const next = { ...t, duration, endsAt: t.startedAt + duration * 1000 };
+      setSetTimer(next);
+      scheduleHoldNotifications(next);
+    },
+    [setTimer, scheduleHoldNotifications],
+  );
 
   const finishSetTimer = useCallback(() => {
-    if (setTimer) completeTimedSet(setTimer, Math.min(setTimer.duration, (Date.now() - setTimer.startedAt) / 1000));
+    if (setTimer) completeTimedSet(setTimer, Math.min(setTimer.duration, (Date.now() - setTimer.startedAt) / 1000), false);
   }, [setTimer, completeTimedSet]);
 
-  const cancelSetTimer = useCallback(() => setSetTimer(null), []);
+  const cancelSetTimer = useCallback(() => {
+    setSetTimer(null);
+    cancelHoldNotification();
+    cancelRestNotification();
+  }, [cancelHoldNotification, cancelRestNotification]);
 
   const toggleSetComplete = useCallback(
     (exerciseKey: string, setKey: string) => {
@@ -249,7 +356,8 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       update((cur) => updateSetIn(cur, exerciseKey, setKey, nextSet));
       if (completing) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-        startRest(restSecondsFor(exerciseKey));
+        // In a superset, rest only after the last exercise of the round.
+        if (shouldRestAfter(w, exerciseKey)) startRest(restSecondsFor(exerciseKey));
       }
     },
     [finishSetTimer, previous, restSecondsFor, setTimer, startRest, update],
@@ -259,7 +367,9 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     setWorkout(null);
     setRestTimer(null);
     setSetTimer(null);
-  }, []);
+    cancelRestNotification();
+    cancelHoldNotification();
+  }, [cancelHoldNotification, cancelRestNotification]);
 
   const finish = useCallback(async () => {
     const w = workoutRef.current;
@@ -297,6 +407,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       cancelSetTimer,
       finish,
       discard,
+      reloadFromStorage,
     }),
     [
       workout,
@@ -316,6 +427,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       cancelSetTimer,
       finish,
       discard,
+      reloadFromStorage,
     ],
   );
 

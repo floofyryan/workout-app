@@ -1,8 +1,8 @@
-// "Critter" body-map figure: a little gym goblin in a double-biceps pose, drawn in a
+// Goblin body-map figure: a little gym goblin in a double-biceps pose, drawn in a
 // 200 × 350 box (centre x = 100). Muscle slugs match react-native-body-highlighter's, so every
 // figure shares one slug → body part mapping. Left-side shapes are mirrored for the right side.
 
-export type CritterSlug =
+export type GoblinSlug =
   | 'neck'
   | 'trapezius'
   | 'deltoids'
@@ -31,22 +31,22 @@ export interface Layer {
   opacity?: number;
 }
 
-export interface CritterPart {
-  slug: CritterSlug;
+export interface GoblinPart {
+  slug: GoblinSlug;
   shapes: Shape[];
   /** Extra detail drawn on top of the muscle (also tappable). */
   details?: Layer[];
 }
 
-export interface CritterView {
+export interface GoblinView {
   /** Drawn first: ears, skin silhouette. */
   under: Layer[];
-  parts: CritterPart[];
+  parts: GoblinPart[];
   /** Drawn last: face, hands, feet, clothing. */
   over: Layer[];
 }
 
-export const CRITTER_VIEWBOX = { width: 200, height: 350 };
+export const GOBLIN_VIEWBOX = { width: 200, height: 350 };
 
 export const PALETTE = {
   skin: '#6E9F4A',
@@ -204,7 +204,7 @@ const NECK = p('M82,123 C90,131 110,131 118,123 L120,133 C110,139 90,139 80,133 
 
 // ---------- front ----------
 
-export const CRITTER_FRONT: CritterView = {
+export const GOBLIN_FRONT: GoblinView = {
   under: sharedUnder(true),
   parts: [
     {
@@ -300,7 +300,7 @@ export const CRITTER_FRONT: CritterView = {
 
 // ---------- back ----------
 
-export const CRITTER_BACK: CritterView = {
+export const GOBLIN_BACK: GoblinView = {
   under: sharedUnder(false),
   parts: [
     { slug: 'neck', shapes: [NECK], details: CHIN_SHADOW },

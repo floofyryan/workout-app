@@ -157,6 +157,14 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
       }
     }
   },
+  // v5: supersets (exercises sharing a group number) and template folders.
+  async (db) => {
+    await db.execAsync(`
+      ALTER TABLE workout_exercises ADD COLUMN superset_group INTEGER;
+      ALTER TABLE template_exercises ADD COLUMN superset_group INTEGER;
+      ALTER TABLE templates ADD COLUMN folder TEXT;
+    `);
+  },
 ];
 
 async function importFreeExerciseDb(db: SQLiteDatabase) {
@@ -259,11 +267,14 @@ async function seed(db: SQLiteDatabase) {
   }
 }
 
-export async function migrateDb(db: SQLiteDatabase) {
+export const SCHEMA_VERSION = MIGRATIONS.length;
+
+/** Brings the database up to date (or up to `upTo`, which tests use to simulate older installs). */
+export async function migrateDb(db: SQLiteDatabase, upTo = SCHEMA_VERSION) {
   await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   let version = row?.user_version ?? 0;
-  while (version < MIGRATIONS.length) {
+  while (version < upTo) {
     const migration = MIGRATIONS[version];
     await db.withTransactionAsync(async () => {
       await migration(db);

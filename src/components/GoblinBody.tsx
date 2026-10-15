@@ -1,17 +1,17 @@
 import Svg, { Defs, Ellipse, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 
 import {
-  CRITTER_BACK,
-  CRITTER_FRONT,
-  CRITTER_VIEWBOX,
+  GOBLIN_BACK,
+  GOBLIN_FRONT,
+  GOBLIN_VIEWBOX,
   GRADIENTS,
   MUSCLE_FILL,
   MUSCLE_HIGHLIGHT_FILL,
   PALETTE,
-  type CritterSlug,
+  type GoblinSlug,
   type Layer,
   type Shape,
-} from '@/data/critterBody';
+} from '@/data/goblinBody';
 
 function ShapeView({
   shape,
@@ -64,8 +64,8 @@ function GradientDefs() {
   );
 }
 
-/** The "critter" body-map figure: a little gym goblin flexing, with tappable muscles. */
-export function CritterBody({
+/** The goblin body-map figure: a little gym goblin flexing, with tappable muscles. */
+export function GoblinBody({
   side,
   scale,
   highlighted,
@@ -75,15 +75,15 @@ export function CritterBody({
   /** 1 = 200 px wide. */
   scale: number;
   highlighted: ReadonlySet<string>;
-  onPress: (slug: CritterSlug) => void;
+  onPress: (slug: GoblinSlug) => void;
 }) {
-  const view = side === 'front' ? CRITTER_FRONT : CRITTER_BACK;
+  const view = side === 'front' ? GOBLIN_FRONT : GOBLIN_BACK;
   return (
     <Svg
-      viewBox={`0 0 ${CRITTER_VIEWBOX.width} ${CRITTER_VIEWBOX.height}`}
-      width={CRITTER_VIEWBOX.width * scale}
-      height={CRITTER_VIEWBOX.height * scale}
-      accessibilityLabel={`critter-${side}`}
+      viewBox={`0 0 ${GOBLIN_VIEWBOX.width} ${GOBLIN_VIEWBOX.height}`}
+      width={GOBLIN_VIEWBOX.width * scale}
+      height={GOBLIN_VIEWBOX.height * scale}
+      accessibilityLabel={`goblin-${side}`}
     >
       <GradientDefs />
       {view.under.map((l, i) => layerView(l, `u${i}`))}

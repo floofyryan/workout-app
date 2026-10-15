@@ -7,10 +7,12 @@ import {
   addExercisesTo,
   addSetTo,
   insertSetsAtStart,
-  moveExerciseIn,
+  leaveSuperset,
   removeExerciseFrom,
   removeSetFrom,
+  reorderExercises,
   replaceExerciseIn,
+  supersetWithNext,
   updateExerciseIn,
   updateSetIn,
   type ActiveExercise,
@@ -23,10 +25,19 @@ import { setPickerHandler } from '@/lib/picker';
 import { formatSet } from '@/lib/setFormat';
 import { colors, radius, spacing } from '@/lib/theme';
 import type { Exercise, SetData, SetType } from '@/lib/types';
-import { clean, displayToKg, displayToMetres, distanceUnit, kgToDisplay, metresToDisplay, weightUnit } from '@/lib/units';
+import {
+  clean,
+  displayToKg,
+  displayToMetres,
+  distanceUnit,
+  kgToDisplay,
+  metresToDisplay,
+  weightUnit,
+} from '@/lib/units';
 import { useSettings } from '@/state/SettingsContext';
 import { DurationInput, NumberInput } from './NumberInput';
 import { ActionSheet, PromptModal, type SheetAction } from './Sheets';
+import { ReorderSheet, SwipeToDelete } from './Sortable';
 import { Button } from './ui';
 
 export type EditorMode = 'live' | 'edit' | 'template';
@@ -34,6 +45,19 @@ export type EditorMode = 'live' | 'edit' | 'template';
 type Change = (fn: (w: ActiveWorkout) => ActiveWorkout) => void;
 
 const BARBELL_LIKE = new Set(['Barbell', 'Smith Machine', 'EZ Bar', 'Trap Bar']);
+
+/** Colours that tell supersets apart. */
+const SUPERSET_COLORS = ['#A855F7', '#F59E0B', '#14B8A6', '#EC4899', '#22C55E'];
+
+/** Colour for each exercise's superset (null when it isn't in one). */
+export function supersetColors(exercises: { supersetId?: string | null }[]): (string | null)[] {
+  const ids = new Map<string, string>();
+  return exercises.map((e) => {
+    if (!e.supersetId) return null;
+    if (!ids.has(e.supersetId)) ids.set(e.supersetId, SUPERSET_COLORS[ids.size % SUPERSET_COLORS.length]);
+    return ids.get(e.supersetId)!;
+  });
+}
 
 /** Editable list of exercises and sets, used for live workouts, past workouts and templates. */
 export function WorkoutEditor({
@@ -70,6 +94,8 @@ export function WorkoutEditor({
     multiline?: boolean;
     onSubmit: (v: string) => void;
   } | null>(null);
+  const [reordering, setReordering] = useState(false);
+  const colorsBySuperset = supersetColors(workout.exercises);
 
   const addExercises = () => {
     setPickerHandler((ids) => onChange((w) => addExercisesTo(w, ids, mode === 'edit')));
@@ -102,7 +128,9 @@ export function WorkoutEditor({
             numeric: true,
             onSubmit: (v) => {
               const n = parseInt(v, 10);
-              onChange((w) => updateExerciseIn(w, item.key, { restSeconds: Number.isFinite(n) ? Math.max(0, n) : null }));
+              onChange((w) =>
+                updateExerciseIn(w, item.key, { restSeconds: Number.isFinite(n) ? Math.max(0, n) : null }),
+              );
             },
           }),
       });
@@ -126,7 +154,11 @@ export function WorkoutEditor({
             insertSetsAtStart(
               w,
               item.key,
-              ramp.map((r) => ({ setType: 'warmup' as SetType, weight: displayToKg(r.weight, settings.units), reps: r.reps })),
+              ramp.map((r) => ({
+                setType: 'warmup' as SetType,
+                weight: displayToKg(r.weight, settings.units),
+                reps: r.reps,
+              })),
             ),
           );
         },
@@ -142,11 +174,23 @@ export function WorkoutEditor({
         router.push({ pathname: '/exercise-picker', params: { single: '1' } });
       },
     });
-    if (index > 0) {
-      actions.push({ label: 'Move up', icon: 'arrow-up', onPress: () => onChange((w) => moveExerciseIn(w, item.key, -1)) });
+    const next = workout.exercises[index + 1];
+    if (next && (!item.supersetId || next.supersetId !== item.supersetId)) {
+      actions.push({
+        label: `Superset with ${exercises.get(next.exerciseId)?.name ?? 'next exercise'}`,
+        icon: 'link-outline',
+        onPress: () => onChange((w) => supersetWithNext(w, item.key)),
+      });
     }
-    if (index < workout.exercises.length - 1) {
-      actions.push({ label: 'Move down', icon: 'arrow-down', onPress: () => onChange((w) => moveExerciseIn(w, item.key, 1)) });
+    if (item.supersetId) {
+      actions.push({
+        label: 'Remove from superset',
+        icon: 'unlink-outline',
+        onPress: () => onChange((w) => leaveSuperset(w, item.key)),
+      });
+    }
+    if (workout.exercises.length > 1) {
+      actions.push({ label: 'Reorder exercises', icon: 'reorder-three-outline', onPress: () => setReordering(true) });
     }
     actions.push({
       label: 'Remove exercise',
@@ -183,6 +227,10 @@ export function WorkoutEditor({
         <ExerciseBlock
           key={item.key}
           item={item}
+          supersetColor={colorsBySuperset[index]}
+          // Label the first exercise of each superset; tighten the gap within one.
+          supersetStart={!!item.supersetId && workout.exercises[index - 1]?.supersetId !== item.supersetId}
+          inSupersetAfterFirst={!!item.supersetId && workout.exercises[index - 1]?.supersetId === item.supersetId}
           exercise={exercises.get(item.exerciseId)}
           previous={previous?.get(item.exerciseId)}
           mode={mode}
@@ -193,13 +241,37 @@ export function WorkoutEditor({
           onStartTimer={onStartTimer ? (setKey) => onStartTimer(item.key, setKey) : undefined}
           timingSetKey={timingSetKey}
           onAddSet={() => onChange((w) => addSetTo(w, item.key, mode === 'edit'))}
+          onRemoveSet={(setKey) => onChange((w) => removeSetFrom(w, item.key, setKey))}
           onNotesChange={(notes) => onChange((w) => updateExerciseIn(w, item.key, { notes }))}
         />
       ))}
-      <Button title="Add Exercises" variant="secondary" icon="add" onPress={addExercises} style={{ marginTop: spacing.lg }} />
+      <Button
+        title="Add Exercises"
+        variant="secondary"
+        icon="add"
+        onPress={addExercises}
+        style={{ marginTop: spacing.lg }}
+      />
       {footer}
 
-      <ActionSheet visible={!!sheet} title={sheet?.title} actions={sheet?.actions ?? []} onClose={() => setSheet(null)} />
+      <ActionSheet
+        visible={!!sheet}
+        title={sheet?.title}
+        actions={sheet?.actions ?? []}
+        onClose={() => setSheet(null)}
+      />
+      <ReorderSheet
+        visible={reordering}
+        title="Reorder exercises"
+        items={workout.exercises.map((e, i) => ({
+          key: e.key,
+          label: exercises.get(e.exerciseId)?.name ?? 'Exercise',
+          sublabel: `${e.sets.length} set${e.sets.length === 1 ? '' : 's'}${e.supersetId ? ' · superset' : ''}`,
+          accent: colorsBySuperset[i],
+        }))}
+        onDone={(keys) => onChange((w) => reorderExercises(w, keys))}
+        onClose={() => setReordering(false)}
+      />
       <PromptModal
         visible={!!prompt}
         title={prompt?.title ?? ''}
@@ -225,7 +297,11 @@ function ExerciseBlock({
   onStartTimer,
   timingSetKey,
   onAddSet,
+  onRemoveSet,
   onNotesChange,
+  supersetColor,
+  supersetStart,
+  inSupersetAfterFirst,
 }: {
   item: ActiveExercise;
   exercise: Exercise | undefined;
@@ -238,7 +314,11 @@ function ExerciseBlock({
   onStartTimer?: (setKey: string) => void;
   timingSetKey?: string | null;
   onAddSet: () => void;
+  onRemoveSet: (setKey: string) => void;
   onNotesChange: (notes: string) => void;
+  supersetColor?: string | null;
+  supersetStart?: boolean;
+  inSupersetAfterFirst?: boolean;
 }) {
   const { settings } = useSettings();
   const units = settings.units;
@@ -268,7 +348,19 @@ function ExerciseBlock({
   let normalIndex = 0;
 
   return (
-    <View style={styles.block}>
+    <View
+      style={[
+        styles.block,
+        supersetColor ? [styles.supersetBlock, { borderLeftColor: supersetColor }] : null,
+        inSupersetAfterFirst && styles.supersetFollow,
+      ]}
+    >
+      {supersetStart && supersetColor ? (
+        <View style={styles.supersetTag}>
+          <Ionicons name="link" size={12} color={supersetColor} />
+          <Text style={[styles.supersetTagText, { color: supersetColor }]}>SUPERSET</Text>
+        </View>
+      ) : null}
       <View style={styles.blockHeader}>
         <Pressable
           style={{ flex: 1 }}
@@ -276,7 +368,7 @@ function ExerciseBlock({
         >
           <Text style={styles.exerciseName}>{exercise?.name ?? 'Loading…'}</Text>
         </Pressable>
-        <Pressable onPress={onMenu} hitSlop={10} style={styles.menuButton}>
+        <Pressable onPress={onMenu} hitSlop={10} style={styles.menuButton} accessibilityLabel="Exercise options">
           <Ionicons name="ellipsis-horizontal" size={20} color={colors.primary} />
         </Pressable>
       </View>
@@ -327,78 +419,89 @@ function ExerciseBlock({
         };
         const ph = (v: number | null | undefined) => (v == null ? '' : String(v));
         return (
-          <View
-            key={set.key}
-            style={[
-              styles.row,
-              styles.setRow,
-              set.completed && showCheck && styles.completedRow,
-              timingSetKey === set.key && styles.timingRow,
-            ]}
-          >
-            <Pressable onPress={() => onSetMenu(set)} style={styles.colSet} hitSlop={4}>
-              <Text style={[styles.setLabel, { color: labelColor }]}>{label}</Text>
-            </Pressable>
-            <Pressable onPress={fillFromPrev} style={styles.colPrev}>
-              <Text style={styles.prevText} numberOfLines={1}>
-                {prev ? formatSet(type, prev, units) : '–'}
-              </Text>
-            </Pressable>
-            {usesWeight(type) && (
-              <NumberInput
-                value={set.weight == null ? null : kgToDisplay(set.weight, units)}
-                onChange={(v) => onUpdateSet(set.key, { weight: v == null ? null : displayToKg(v, units) })}
-                placeholder={prev?.weight != null ? ph(clean(kgToDisplay(prev.weight, units), 1)) : ''}
-                style={[styles.colInput, styles.input, set.completed && showCheck && styles.inputDone]}
-              />
-            )}
-            {type === 'distance_duration' && (
-              <NumberInput
-                value={set.distanceM == null ? null : metresToDisplay(set.distanceM, units)}
-                onChange={(v) => onUpdateSet(set.key, { distanceM: v == null ? null : displayToMetres(v, units) })}
-                placeholder={prev?.distanceM != null ? ph(clean(metresToDisplay(prev.distanceM, units), 2)) : ''}
-                style={[styles.colInput, styles.input, set.completed && showCheck && styles.inputDone]}
-              />
-            )}
-            {type !== 'duration' && type !== 'distance_duration' && (
-              <NumberInput
-                integer
-                value={set.reps}
-                onChange={(v) => onUpdateSet(set.key, { reps: v })}
-                placeholder={ph(prev?.reps)}
-                style={[styles.colInput, styles.input, set.completed && showCheck && styles.inputDone]}
-              />
-            )}
-            {(type === 'duration' || type === 'distance_duration') && (
-              <DurationInput
-                value={set.durationS}
-                onChange={(v) => onUpdateSet(set.key, { durationS: v })}
-                placeholder={prev?.durationS != null ? formatClock(prev.durationS) : ''}
-                style={[styles.colInput, styles.input, set.completed && showCheck && styles.inputDone]}
-              />
-            )}
-            {showTimer && (
-              <Pressable
-                onPress={() => onStartTimer?.(set.key)}
-                disabled={set.completed || timingSetKey === set.key}
-                style={[styles.colCheck, styles.check, styles.play, (set.completed || timingSetKey === set.key) && { opacity: 0.35 }]}
-                hitSlop={6}
-                accessibilityLabel="Start set timer"
-              >
-                <Ionicons name={timingSetKey === set.key ? 'hourglass-outline' : 'play'} size={16} color={colors.primary} />
+          <SwipeToDelete key={set.key} onDelete={() => onRemoveSet(set.key)}>
+            <View
+              style={[
+                styles.row,
+                styles.setRow,
+                styles.setRowBg,
+                set.completed && showCheck && styles.completedRow,
+                timingSetKey === set.key && styles.timingRow,
+              ]}
+            >
+              <Pressable onPress={() => onSetMenu(set)} style={styles.colSet} hitSlop={4}>
+                <Text style={[styles.setLabel, { color: labelColor }]}>{label}</Text>
               </Pressable>
-            )}
-            {showCheck && (
-              <Pressable
-                onPress={() => onToggleComplete?.(set.key)}
-                style={[styles.colCheck, styles.check, set.completed && styles.checkDone]}
-                hitSlop={6}
-                accessibilityLabel={set.completed ? 'Mark set incomplete' : 'Complete set'}
-              >
-                <Ionicons name="checkmark" size={18} color={set.completed ? '#fff' : colors.muted} />
+              <Pressable onPress={fillFromPrev} style={styles.colPrev}>
+                <Text style={styles.prevText} numberOfLines={1}>
+                  {prev ? formatSet(type, prev, units) : '–'}
+                </Text>
               </Pressable>
-            )}
-          </View>
+              {usesWeight(type) && (
+                <NumberInput
+                  value={set.weight == null ? null : kgToDisplay(set.weight, units)}
+                  onChange={(v) => onUpdateSet(set.key, { weight: v == null ? null : displayToKg(v, units) })}
+                  placeholder={prev?.weight != null ? ph(clean(kgToDisplay(prev.weight, units), 1)) : ''}
+                  style={[styles.colInput, styles.input, set.completed && showCheck && styles.inputDone]}
+                />
+              )}
+              {type === 'distance_duration' && (
+                <NumberInput
+                  value={set.distanceM == null ? null : metresToDisplay(set.distanceM, units)}
+                  onChange={(v) => onUpdateSet(set.key, { distanceM: v == null ? null : displayToMetres(v, units) })}
+                  placeholder={prev?.distanceM != null ? ph(clean(metresToDisplay(prev.distanceM, units), 2)) : ''}
+                  style={[styles.colInput, styles.input, set.completed && showCheck && styles.inputDone]}
+                />
+              )}
+              {type !== 'duration' && type !== 'distance_duration' && (
+                <NumberInput
+                  integer
+                  value={set.reps}
+                  onChange={(v) => onUpdateSet(set.key, { reps: v })}
+                  placeholder={ph(prev?.reps)}
+                  style={[styles.colInput, styles.input, set.completed && showCheck && styles.inputDone]}
+                />
+              )}
+              {(type === 'duration' || type === 'distance_duration') && (
+                <DurationInput
+                  value={set.durationS}
+                  onChange={(v) => onUpdateSet(set.key, { durationS: v })}
+                  placeholder={prev?.durationS != null ? formatClock(prev.durationS) : ''}
+                  style={[styles.colInput, styles.input, set.completed && showCheck && styles.inputDone]}
+                />
+              )}
+              {showTimer && (
+                <Pressable
+                  onPress={() => onStartTimer?.(set.key)}
+                  disabled={set.completed || timingSetKey === set.key}
+                  style={[
+                    styles.colCheck,
+                    styles.check,
+                    styles.play,
+                    (set.completed || timingSetKey === set.key) && { opacity: 0.35 },
+                  ]}
+                  hitSlop={6}
+                  accessibilityLabel="Start set timer"
+                >
+                  <Ionicons
+                    name={timingSetKey === set.key ? 'hourglass-outline' : 'play'}
+                    size={16}
+                    color={colors.primary}
+                  />
+                </Pressable>
+              )}
+              {showCheck && (
+                <Pressable
+                  onPress={() => onToggleComplete?.(set.key)}
+                  style={[styles.colCheck, styles.check, set.completed && styles.checkDone]}
+                  hitSlop={6}
+                  accessibilityLabel={set.completed ? 'Mark set incomplete' : 'Complete set'}
+                >
+                  <Ionicons name="checkmark" size={18} color={set.completed ? '#fff' : colors.muted} />
+                </Pressable>
+              )}
+            </View>
+          </SwipeToDelete>
         );
       })}
 
@@ -411,9 +514,19 @@ function ExerciseBlock({
 
 const styles = StyleSheet.create({
   block: { marginTop: spacing.xl },
+  supersetBlock: { borderLeftWidth: 3, paddingLeft: spacing.sm, borderRadius: 2 },
+  supersetFollow: { marginTop: spacing.md },
+  supersetTag: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
+  supersetTagText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
+  setRowBg: { backgroundColor: colors.background },
   blockHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs },
   exerciseName: { color: colors.primary, fontSize: 17, fontWeight: '700' },
-  menuButton: { backgroundColor: 'rgba(59,130,246,0.15)', borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 2 },
+  menuButton: {
+    backgroundColor: 'rgba(59,130,246,0.15)',
+    borderRadius: radius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
   notes: {
     color: colors.warning,
     fontSize: 14,

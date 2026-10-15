@@ -1,4 +1,4 @@
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, ScrollView, StyleSheet, TextInput, View } from 'react-native';
@@ -10,6 +10,7 @@ import { templateExercisesFromWorkout, workoutFromTemplate, type ActiveWorkout }
 import { useExerciseMap } from '@/lib/hooks';
 import { colors, spacing } from '@/lib/theme';
 import type { TemplateKind } from '@/lib/types';
+import { useUnsavedChangesGuard } from '@/lib/useUnsavedChangesGuard';
 
 export default function TemplateEditorScreen() {
   const db = useSQLiteContext();
@@ -19,14 +20,22 @@ export default function TemplateEditorScreen() {
   const [draft, setDraft] = useState<ActiveWorkout | null>(
     isNew ? { name: '', notes: '', startedAt: 0, templateId: null, exercises: [] } : null,
   );
+  const [folder, setFolder] = useState('');
   const exercises = useExerciseMap(draft?.exercises.map((e) => e.exerciseId) ?? []);
+  // What was loaded (or the blank new template), to tell whether anything has been edited.
+  const snapshot = JSON.stringify({ draft, kind, folder });
+  const [original, setOriginal] = useState<string | null>(isNew ? snapshot : null);
+  const leave = useUnsavedChangesGuard(original != null && snapshot !== original);
 
   useEffect(() => {
     if (isNew) return;
     getTemplate(db, Number(id)).then((t) => {
       if (!t) return;
-      setDraft(workoutFromTemplate(t, 0));
+      const loaded = workoutFromTemplate(t, 0);
+      setDraft(loaded);
       setKind(t.kind);
+      setFolder(t.folder ?? '');
+      setOriginal(JSON.stringify({ draft: loaded, kind: t.kind, folder: t.folder ?? '' }));
     });
   }, [db, id, isNew]);
 
@@ -41,9 +50,10 @@ export default function TemplateEditorScreen() {
       name: draft.name,
       notes: draft.notes,
       kind,
+      folder,
       exercises: templateExercisesFromWorkout(draft),
     });
-    router.back();
+    leave();
   };
 
   return (
@@ -82,6 +92,13 @@ export default function TemplateEditorScreen() {
                 <Chip label="Workout" selected={kind === 'workout'} onPress={() => setKind('workout')} />
                 <Chip label="Stretch" selected={kind === 'stretch'} onPress={() => setKind('stretch')} />
               </View>
+              <TextInput
+                value={folder}
+                onChangeText={setFolder}
+                placeholder="Folder (optional), e.g. PPL or Mobility"
+                placeholderTextColor={colors.faint}
+                style={styles.folder}
+              />
             </View>
           }
         />
@@ -95,4 +112,13 @@ const styles = StyleSheet.create({
   name: { color: colors.text, fontSize: 24, fontWeight: '700', paddingVertical: 4 },
   notes: { color: colors.muted, fontSize: 15, paddingVertical: 4 },
   kinds: { flexDirection: 'row', marginTop: spacing.sm },
+  folder: {
+    color: colors.text,
+    fontSize: 15,
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    marginTop: spacing.sm,
+  },
 });

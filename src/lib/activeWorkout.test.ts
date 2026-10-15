@@ -24,6 +24,7 @@ const template: Template = {
   name: 'Push',
   notes: '',
   kind: 'workout',
+  folder: null,
   lastUsedAt: null,
   exercises: [
     {

@@ -1,4 +1,4 @@
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, ScrollView, StyleSheet, TextInput, View } from 'react-native';
@@ -7,9 +7,16 @@ import { NumberInput } from '@/components/NumberInput';
 import { WorkoutEditor } from '@/components/WorkoutEditor';
 import { Button, SectionTitle } from '@/components/ui';
 import { getWorkout, saveWorkout } from '@/db/repo';
-import { completedExercises, newActiveSet, newKey, type ActiveWorkout } from '@/lib/activeWorkout';
+import {
+  completedExercises,
+  newActiveSet,
+  newKey,
+  supersetIdsFromGroups,
+  type ActiveWorkout,
+} from '@/lib/activeWorkout';
 import { useExerciseMap } from '@/lib/hooks';
 import { colors, radius, spacing } from '@/lib/theme';
+import { useUnsavedChangesGuard } from '@/lib/useUnsavedChangesGuard';
 
 export default function EditWorkoutScreen() {
   const db = useSQLiteContext();
@@ -17,24 +24,33 @@ export default function EditWorkoutScreen() {
   const [draft, setDraft] = useState<ActiveWorkout | null>(null);
   const [durationMin, setDurationMin] = useState<number | null>(null);
   const exercises = useExerciseMap(draft?.exercises.map((e) => e.exerciseId) ?? []);
+  // What was loaded, to tell whether anything has been edited.
+  const [original, setOriginal] = useState<string | null>(null);
+  const snapshot = JSON.stringify({ draft, durationMin });
+  const leave = useUnsavedChangesGuard(original != null && snapshot !== original);
 
   useEffect(() => {
     getWorkout(db, Number(id)).then((w) => {
       if (!w) return;
-      setDurationMin(Math.round((w.endedAt - w.startedAt) / 60000));
-      setDraft({
+      const minutes = Math.round((w.endedAt - w.startedAt) / 60000);
+      const supersetIds = supersetIdsFromGroups(w.exercises.map((e) => e.supersetGroup));
+      const loaded: ActiveWorkout = {
         name: w.name,
         notes: w.notes,
         startedAt: w.startedAt,
         templateId: w.templateId,
-        exercises: w.exercises.map((e) => ({
+        exercises: w.exercises.map((e, i) => ({
           key: newKey(),
           exerciseId: e.exercise.id,
           notes: e.notes,
           restSeconds: null,
           sets: e.sets.map((s) => ({ ...newActiveSet(s), completed: true })),
+          supersetId: supersetIds[i],
         })),
-      });
+      };
+      setDraft(loaded);
+      setDurationMin(minutes);
+      setOriginal(JSON.stringify({ draft: loaded, durationMin: minutes }));
     });
   }, [db, id]);
 
@@ -54,7 +70,7 @@ export default function EditWorkoutScreen() {
       templateId: draft.templateId,
       exercises: done,
     });
-    router.back();
+    leave();
   };
 
   return (

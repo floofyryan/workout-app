@@ -124,6 +124,8 @@ export interface TemplateExercise {
   restSeconds: number | null;
   notes: string;
   sets: SetData[];
+  /** Exercises with the same number (next to each other) form a superset. */
+  supersetGroup?: number | null;
 }
 
 export const TEMPLATE_KINDS = ['workout', 'stretch'] as const;
@@ -135,6 +137,8 @@ export interface Template {
   notes: string;
   /** Workout routines and stretch routines are listed separately. */
   kind: TemplateKind;
+  /** Optional folder name for grouping templates on the Workout tab. */
+  folder: string | null;
   lastUsedAt: number | null;
   exercises: TemplateExercise[];
 }
@@ -153,6 +157,7 @@ export interface WorkoutExerciseDetail {
   exercise: Exercise;
   notes: string;
   sets: SetData[];
+  supersetGroup: number | null;
 }
 
 export interface WorkoutDetail extends WorkoutSummary {
@@ -170,8 +175,10 @@ export interface Settings {
   plates: number[];
   vibrateOnRestEnd: boolean;
   keepScreenOn: boolean;
+  /** Notify when rest/hold timers end while the app is in the background or the screen is off. */
+  timerNotifications: boolean;
   /** Which figure the exercise body map shows. */
-  bodyMapGender: 'critter' | 'male' | 'female';
+  bodyMapFigure: 'goblin' | 'male' | 'female';
 }
 
 export const MEASUREMENT_TYPES = [
