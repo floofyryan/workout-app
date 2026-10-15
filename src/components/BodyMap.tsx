@@ -87,7 +87,6 @@ export function BodyMap({
           side={side}
           scale={scale}
           highlighted={new Set(highlighted.map((h) => h.slug as string))}
-          highlightColor={colors.primary}
           onPress={onPressSlug}
         />
       ) : (
