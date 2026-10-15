@@ -7,11 +7,12 @@ import {
   addSetTo,
   completedExercises,
   countIncompleteSets,
-  differsFromTemplate,
   fillBlanks,
   moveExerciseIn,
   newActiveSet,
   removeSetFrom,
+  templateChanges,
+  templateExercisesFromWorkout,
   updateSetIn,
   workoutFromTemplate,
   type ActiveWorkout,
@@ -45,7 +46,7 @@ describe('active workout editing', () => {
     assert.equal(w.templateId, 1);
     assert.equal(w.exercises[0].sets.length, 2);
     assert.equal(w.exercises[0].restSeconds, 90);
-    assert.equal(differsFromTemplate(w, template), false);
+    assert.equal(templateChanges(w, template), null);
   });
 
   it('adds sets copying the previous values', () => {
@@ -54,7 +55,7 @@ describe('active workout editing', () => {
     w = addSetTo(w, key);
     assert.equal(w.exercises[0].sets.length, 3);
     assert.equal(w.exercises[0].sets[2].weight, 100);
-    assert.equal(differsFromTemplate(w, template), true);
+    assert.equal(templateChanges(w, template), 'exercises');
     w = removeSetFrom(w, key, w.exercises[0].sets[2].key);
     assert.equal(w.exercises[0].sets.length, 2);
   });
@@ -69,6 +70,27 @@ describe('active workout editing', () => {
     assert.equal(done.length, 1);
     assert.equal(done[0].sets.length, 1);
     assert.equal('completed' in done[0].sets[0], false);
+  });
+
+  it('notices when only the weights or reps changed', () => {
+    let w = workoutFromTemplate(template, 0);
+    const ex = w.exercises[0];
+    // Ticking a set with the template's own values is not a change.
+    w = updateSetIn(w, ex.key, ex.sets[0].key, { completed: true });
+    assert.equal(templateChanges(w, template), null);
+    // A heavier second set that was never ticked doesn't count either.
+    w = updateSetIn(w, ex.key, ex.sets[1].key, { weight: 105 });
+    assert.equal(templateChanges(w, template), null);
+    w = updateSetIn(w, ex.key, ex.sets[1].key, { completed: true });
+    assert.equal(templateChanges(w, template), 'values');
+    const saved = templateExercisesFromWorkout(w);
+    assert.deepEqual(
+      saved[0].sets.map((s) => [s.weight, s.reps]),
+      [
+        [100, 5],
+        [105, 5],
+      ],
+    );
   });
 
   it('reorders exercises', () => {

@@ -145,13 +145,32 @@ export function templateExercisesFromWorkout(w: ActiveWorkout): TemplateExercise
   }));
 }
 
-/** True when the exercises or set counts differ from the template the workout started from. */
-export function differsFromTemplate(w: ActiveWorkout, t: Template): boolean {
-  if (w.exercises.length !== t.exercises.length) return true;
-  return w.exercises.some((e, i) => {
+/**
+ * How a workout differs from the template it started from: 'exercises' when exercises or set counts
+ * changed, 'values' when only the numbers of completed sets (weight, reps, time, distance, set type)
+ * changed, or null when it matches.
+ */
+export function templateChanges(w: ActiveWorkout, t: Template): 'exercises' | 'values' | null {
+  if (w.exercises.length !== t.exercises.length) return 'exercises';
+  const structure = w.exercises.some((e, i) => {
     const te = t.exercises[i];
     return e.exerciseId !== te.exerciseId || e.sets.length !== te.sets.length;
   });
+  if (structure) return 'exercises';
+  const values = w.exercises.some((e, i) =>
+    e.sets.some((s, j) => {
+      if (!s.completed) return false;
+      const ts = t.exercises[i].sets[j];
+      return (
+        s.setType !== ts.setType ||
+        s.weight !== ts.weight ||
+        s.reps !== ts.reps ||
+        s.durationS !== ts.durationS ||
+        s.distanceM !== ts.distanceM
+      );
+    }),
+  );
+  return values ? 'values' : null;
 }
 
 // ---------- Pure editing operations (shared by the live workout, history editor and template editor) ----------

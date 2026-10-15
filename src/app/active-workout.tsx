@@ -14,7 +14,7 @@ import { getTemplate, saveTemplate } from '@/db/repo';
 import {
   completedExercises,
   countIncompleteSets,
-  differsFromTemplate,
+  templateChanges,
   templateExercisesFromWorkout,
 } from '@/lib/activeWorkout';
 import { confirmAsync } from '@/lib/dialog';
@@ -69,11 +69,16 @@ export default function ActiveWorkoutScreen() {
     try {
       if (workout.templateId != null) {
         const template = await getTemplate(db, workout.templateId);
-        if (template && differsFromTemplate(workout, template)) {
+        const changes = template ? templateChanges(workout, template) : null;
+        if (template && changes) {
           const updateTemplate = await confirmAsync(
             'Update template?',
-            `You changed the exercises or sets compared to "${template.name}". Update the template to match?`,
+            changes === 'exercises'
+              ? `You changed the exercises or sets compared to "${template.name}". Update the template to match, including today's weights and reps?`
+              : `Save today's weights and reps to "${template.name}" so they're filled in next time?`,
             'Update template',
+            false,
+            'Keep as is',
           );
           if (updateTemplate) {
             await saveTemplate(db, template.id, {

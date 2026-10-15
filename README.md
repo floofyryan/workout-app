@@ -28,7 +28,8 @@ in SQLite.
   - With the screen off or the app in the background, a notification tells you when a hold or rest
     is over (can be turned off in Settings).
   - The workout survives the app being closed, and keeps the screen on (configurable).
-  - Finishing offers to update the template if you changed exercises or set counts.
+  - Finishing offers to update the template if you changed its exercises or sets, or lifted different
+    weights / reps, so next time it starts filled in with what you did.
   - The template and past-workout editors ask before throwing away unsaved changes.
 - **Tracking types** – weight & reps, reps only, weighted bodyweight (+kg), assisted bodyweight
   (−kg), duration, distance & duration.
