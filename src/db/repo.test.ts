@@ -2,11 +2,14 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
+import { parseStrongCsv, workoutsToStrongCsv } from '../lib/strongCsv';
 import type { SetData } from '../lib/types';
 import {
   addMeasurement,
+  deleteTemplate,
   duplicateTemplate,
   exportBackup,
+  exportWorkouts,
   findExerciseByName,
   getPreviousSets,
   getRecordsBefore,
@@ -100,6 +103,27 @@ describe('migrations', () => {
       const neck = await db.getFirstAsync<{ n: number }>("SELECT COUNT(*) AS n FROM exercises WHERE body_part = 'Neck'");
       assert.ok((neck?.n ?? 0) > 0);
     }));
+
+  test('a migration and its version number are saved together', async () => {
+    const db = openTestDb();
+    try {
+      // Fail the first version bump, as if the app were killed right after the migration ran.
+      const exec = db.execAsync.bind(db);
+      db.execAsync = async (sql: string) => {
+        if (sql.startsWith('PRAGMA user_version')) throw new Error('killed');
+        return exec(sql);
+      };
+      await assert.rejects(migrateDb(db), /killed/);
+      db.execAsync = exec;
+      // Nothing was left half applied, so the next launch migrates normally.
+      await migrateDb(db);
+      const v = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
+      assert.equal(v?.user_version, SCHEMA_VERSION);
+      assert.equal((await listTemplates(db)).length, 5);
+    } finally {
+      db.close();
+    }
+  });
 
   test('running the migrations again does nothing', () =>
     withDb(async (db) => {
@@ -229,6 +253,51 @@ describe('workouts', () => {
       assert.ok(records);
       assert.equal(records.maxWeight, 70);
       assert.equal(await getRecordsBefore(db, bench, 1_000), null);
+    }));
+
+  test('a workout still saves if its template was deleted while it was in progress', () =>
+    withDb(async (db) => {
+      const bench = await exerciseId(db, 'Bench Press (Barbell)');
+      const [gone, kept] = await listTemplates(db);
+      await deleteTemplate(db, gone.id);
+      const workout = (templateId: number) => ({
+        name: 'From a template',
+        notes: '',
+        startedAt: 1_000,
+        endedAt: 2_000,
+        templateId,
+        exercises: [{ exerciseId: bench.id, notes: '', sets: [set(60, 5)] }],
+      });
+
+      const id = await saveWorkout(db, null, workout(gone.id));
+      assert.equal((await getWorkout(db, id))?.templateId, null, 'saved, unlinked from the deleted template');
+      // Templates that still exist stay linked, when saving and when editing.
+      const other = await saveWorkout(db, null, workout(kept.id));
+      assert.equal((await getWorkout(db, other))?.templateId, kept.id);
+      await saveWorkout(db, other, workout(kept.id));
+      assert.equal((await getWorkout(db, other))?.templateId, kept.id);
+    }));
+
+  test("re-importing this app's own CSV export skips the workouts it already has", () =>
+    withDb(async (db) => {
+      const bench = await exerciseId(db, 'Bench Press (Barbell)');
+      // Workouts recorded in the app have millisecond start times; the CSV keeps whole seconds.
+      const startedAt = new Date(2026, 9, 1, 18, 30, 12, 345).getTime();
+      await saveWorkout(db, null, {
+        name: 'Evening Workout',
+        notes: '',
+        startedAt,
+        endedAt: startedAt + 3_600_000,
+        templateId: null,
+        exercises: [{ exerciseId: bench.id, notes: '', sets: [set(60, 5)] }],
+      });
+      const [exported] = parseStrongCsv(workoutsToStrongCsv(await exportWorkouts(db), 'metric'), 'metric').workouts;
+
+      assert.deepEqual(await importWorkouts(db, [exported]), { workoutsImported: 0, workoutsSkipped: 1, exercisesCreated: 0 });
+      // A workout with the same name a second later is a different one.
+      const later = { ...exported, startedAt: exported.startedAt + 1000 };
+      assert.equal((await importWorkouts(db, [later])).workoutsImported, 1);
+      assert.equal(await workoutCount(db), 2);
     }));
 
   test('importing the same workouts twice skips duplicates and creates unknown exercises once', () =>

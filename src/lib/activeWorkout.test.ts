@@ -7,10 +7,13 @@ import {
   addSetTo,
   completedExercises,
   countIncompleteSets,
+  editedExercises,
   fillBlanks,
+  insertSetsAtStart,
   moveExerciseIn,
   newActiveSet,
   removeSetFrom,
+  replaceExerciseIn,
   templateChanges,
   templateExercisesFromWorkout,
   updateSetIn,
@@ -70,6 +73,28 @@ describe('active workout editing', () => {
     assert.equal(done.length, 1);
     assert.equal(done[0].sets.length, 1);
     assert.equal('completed' in done[0].sets[0], false);
+  });
+
+  it('the past-workout editor saves replaced exercises and added warm-ups', () => {
+    // Loaded the way the editor loads a past workout: every set ticked (it has no tick column).
+    let w = workoutFromTemplate(template, 0);
+    w = { ...w, exercises: w.exercises.map((e) => ({ ...e, sets: e.sets.map((s) => ({ ...s, completed: true })) })) };
+    w = addExercisesTo(w, [11, 13], true);
+    const [bench, swapped] = w.exercises;
+    w = insertSetsAtStart(w, bench.key, [{ setType: 'warmup', weight: 40, reps: 10 }]);
+    w = replaceExerciseIn(w, swapped.key, 12);
+    w = updateSetIn(w, swapped.key, w.exercises[1].sets[0].key, { weight: 30, reps: 12 });
+
+    const saved = editedExercises(w);
+    assert.deepEqual(
+      saved.map((e) => [e.exerciseId, e.sets.length]),
+      [
+        [10, 3],
+        [12, 1],
+      ],
+      'exercise 13 has no values, so it is left out',
+    );
+    assert.equal(saved[0].sets[0].setType, 'warmup');
   });
 
   it('notices when only the weights or reps changed', () => {

@@ -117,6 +117,17 @@ export function completedExercises(w: ActiveWorkout) {
   return done.map(({ supersetId: _, ...e }, i) => ({ ...e, supersetGroup: groups[i] }));
 }
 
+/**
+ * What the past-workout editor saves. It has no ticks, so every set with values counts, including
+ * the unticked ones that "Replace exercise" and "Add warm-up sets" create.
+ */
+export function editedExercises(w: ActiveWorkout) {
+  return completedExercises({
+    ...w,
+    exercises: w.exercises.map((e) => ({ ...e, sets: e.sets.map((s) => ({ ...s, completed: true })) })),
+  });
+}
+
 export function countIncompleteSets(w: ActiveWorkout): number {
   return w.exercises.reduce((n, e) => n + e.sets.filter((s) => !s.completed).length, 0);
 }

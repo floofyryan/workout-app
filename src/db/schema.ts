@@ -276,10 +276,13 @@ export async function migrateDb(db: SQLiteDatabase, upTo = SCHEMA_VERSION) {
   let version = row?.user_version ?? 0;
   while (version < upTo) {
     const migration = MIGRATIONS[version];
+    const next = version + 1;
+    // The version is bumped in the same transaction as the changes, so being killed in between
+    // can't leave a migration applied but unrecorded (it would run again and fail on every launch).
     await db.withTransactionAsync(async () => {
       await migration(db);
+      await db.execAsync(`PRAGMA user_version = ${next}`);
     });
-    version++;
-    await db.execAsync(`PRAGMA user_version = ${version}`);
+    version = next;
   }
 }

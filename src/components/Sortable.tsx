@@ -25,29 +25,33 @@ function moved<T>(list: T[], from: number, to: number): T[] {
 
 /** Drag-to-reorder list: press and drag the handle on the right of a row. */
 export function SortableList({ items, onChange }: { items: SortableItem[]; onChange: (keys: string[]) => void }) {
-  const [drag, setDrag] = useState<{ index: number; dy: number } | null>(null);
-  const target = drag ? Math.max(0, Math.min(items.length - 1, drag.index + Math.round(drag.dy / ROW_HEIGHT))) : -1;
+  // `startY` is where the touch began (page coordinates) and distances are measured from it, not
+  // with PanResponder's running total: the parent can re-render mid-drag (the live workout does
+  // every second for its clock), which builds new responders, and a new one would count from zero
+  // again, dropping the row in the wrong place.
+  const [drag, setDrag] = useState<{ index: number; startY: number; dy: number } | null>(null);
+  const count = items.length;
+  const clamp = (i: number) => Math.max(0, Math.min(count - 1, i));
+  const target = drag ? clamp(drag.index + Math.round(drag.dy / ROW_HEIGHT)) : -1;
 
-  // One responder per row. `items` doesn't change while a row is being dragged, so these stay put
-  // for the whole gesture.
-  const responders = useMemo(
-    () =>
-      items.map((_, index) =>
-        PanResponder.create({
-          onStartShouldSetPanResponder: () => true,
-          onMoveShouldSetPanResponder: () => true,
-          onPanResponderTerminationRequest: () => false,
-          onPanResponderGrant: () => setDrag({ index, dy: 0 }),
-          onPanResponderMove: (_, g) => setDrag({ index, dy: g.dy }),
-          onPanResponderRelease: (_, g) => {
-            const to = Math.max(0, Math.min(items.length - 1, index + Math.round(g.dy / ROW_HEIGHT)));
-            setDrag(null);
-            if (to !== index) onChange(moved(items, index, to).map((i) => i.key));
-          },
-          onPanResponderTerminate: () => setDrag(null),
-        }),
-      ),
-    [items, onChange],
+  const responders = items.map((_, index) =>
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (e) => setDrag({ index, startY: e.nativeEvent.pageY, dy: 0 }),
+      onPanResponderMove: (e) => {
+        const y = e.nativeEvent.pageY;
+        setDrag((d) => d && { ...d, dy: y - d.startY });
+      },
+      onPanResponderRelease: (e) => {
+        setDrag(null);
+        if (!drag) return;
+        const to = clamp(index + Math.round((e.nativeEvent.pageY - drag.startY) / ROW_HEIGHT));
+        if (to !== index) onChange(moved(items, index, to).map((i) => i.key));
+      },
+      onPanResponderTerminate: () => setDrag(null),
+    }),
   );
 
   return (
@@ -145,28 +149,37 @@ export function SwipeToDelete({
   enabled?: boolean;
 }) {
   const [translateX] = useState(() => new Animated.Value(0));
+  // Where the swipe was picked up (page x). The distance is measured from it, not with
+  // PanResponder's running total: callers pass a new onDelete on every render and the live workout
+  // re-renders every second, which builds a new responder, and a new one would count from zero
+  // again, so the row would spring back instead of being deleted.
+  const [startX, setStartX] = useState<number | null>(null);
+  const springBack = () => Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
 
-  const responder = useMemo(
-    () =>
-      PanResponder.create({
-        // Only claim clearly horizontal swipes so taps, typing and vertical scrolling still work.
-        onMoveShouldSetPanResponder: (_, g) => enabled && Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
-        onPanResponderTerminationRequest: () => false,
-        onPanResponderMove: (_, g) => translateX.setValue(Math.min(0, g.dx)),
-        onPanResponderRelease: (_, g) => {
-          if (g.dx < -90) {
-            Animated.timing(translateX, { toValue: -600, duration: 150, useNativeDriver: true }).start(() => {
-              onDelete();
-              translateX.setValue(0);
-            });
-          } else {
-            Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
-          }
-        },
-        onPanResponderTerminate: () => Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start(),
-      }),
-    [enabled, onDelete, translateX],
-  );
+  const responder = PanResponder.create({
+    // Only claim clearly horizontal swipes so taps, typing and vertical scrolling still work.
+    onMoveShouldSetPanResponder: (_, g) => enabled && Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderGrant: (e) => setStartX(e.nativeEvent.pageX),
+    onPanResponderMove: (e) => {
+      if (startX != null) translateX.setValue(Math.min(0, e.nativeEvent.pageX - startX));
+    },
+    onPanResponderRelease: (e) => {
+      setStartX(null);
+      if (startX != null && e.nativeEvent.pageX - startX < -90) {
+        Animated.timing(translateX, { toValue: -600, duration: 150, useNativeDriver: true }).start(() => {
+          onDelete();
+          translateX.setValue(0);
+        });
+      } else {
+        springBack();
+      }
+    },
+    onPanResponderTerminate: () => {
+      setStartX(null);
+      springBack();
+    },
+  });
 
   return (
     <View style={styles.swipeContainer}>

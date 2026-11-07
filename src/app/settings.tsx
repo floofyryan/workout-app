@@ -36,6 +36,13 @@ export default function SettingsScreen() {
   const { settings, updateSettings, reloadSettings } = useSettings();
   const { reloadFromStorage } = useActiveWorkout();
   const [platesText, setPlatesText] = useState(settings.plates.join(', '));
+  // Show the saved plates whenever they change: switching units resets them (either way) and
+  // restoring a backup replaces them.
+  const [shownPlates, setShownPlates] = useState(settings.plates);
+  if (shownPlates !== settings.plates) {
+    setShownPlates(settings.plates);
+    setPlatesText(settings.plates.join(', '));
+  }
   const [busy, setBusy] = useState<string | null>(null);
   const wu = weightUnit(settings.units);
 
@@ -92,8 +99,7 @@ export default function SettingsScreen() {
             const text = await pickTextFile(['application/json', '*/*']);
             if (text == null) return;
             await restoreBackup(db, text);
-            const restored = await reloadSettings();
-            setPlatesText(restored.plates.join(', '));
+            await reloadSettings();
             await reloadFromStorage();
             Alert.alert('Restored', 'Your workouts, templates, exercises and settings have been restored.');
           }),
@@ -111,14 +117,7 @@ export default function SettingsScreen() {
       <SectionTitle>Units</SectionTitle>
       <View style={styles.row}>
         <Chip label="Metric (kg, cm, km)" selected={settings.units === 'metric'} onPress={() => updateSettings({ units: 'metric' })} />
-        <Chip
-          label="Imperial (lb, in, mi)"
-          selected={settings.units === 'imperial'}
-          onPress={() => {
-            updateSettings({ units: 'imperial' });
-            setPlatesText([45, 35, 25, 10, 5, 2.5].join(', '));
-          }}
-        />
+        <Chip label="Imperial (lb, in, mi)" selected={settings.units === 'imperial'} onPress={() => updateSettings({ units: 'imperial' })} />
       </View>
 
       <SectionTitle>Default rest timer</SectionTitle>

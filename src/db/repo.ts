@@ -441,13 +441,18 @@ async function insertWorkoutExercises(db: SQLiteDatabase, workoutId: number, exe
   }
 }
 
+// The template can be deleted while a workout started from it is still in progress. Link to it only
+// if it still exists (as ON DELETE SET NULL does for saved workouts); otherwise the foreign key
+// would reject the workout and it could never be saved.
+const TEMPLATE_IF_EXISTS = '(SELECT id FROM templates WHERE id = ?)';
+
 /** Creates (id = null) or replaces a workout. Returns its id. */
 export async function saveWorkout(db: SQLiteDatabase, id: number | null, w: WorkoutInput): Promise<number> {
   let workoutId = id;
   await db.withTransactionAsync(async () => {
     if (workoutId == null) {
       const res = await db.runAsync(
-        'INSERT INTO workouts (name, notes, started_at, ended_at, template_id) VALUES (?, ?, ?, ?, ?)',
+        `INSERT INTO workouts (name, notes, started_at, ended_at, template_id) VALUES (?, ?, ?, ?, ${TEMPLATE_IF_EXISTS})`,
         w.name,
         w.notes,
         w.startedAt,
@@ -457,7 +462,7 @@ export async function saveWorkout(db: SQLiteDatabase, id: number | null, w: Work
       workoutId = res.lastInsertRowId;
     } else {
       await db.runAsync(
-        'UPDATE workouts SET name = ?, notes = ?, started_at = ?, ended_at = ?, template_id = ? WHERE id = ?',
+        `UPDATE workouts SET name = ?, notes = ?, started_at = ?, ended_at = ?, template_id = ${TEMPLATE_IF_EXISTS} WHERE id = ?`,
         w.name,
         w.notes,
         w.startedAt,
@@ -663,9 +668,13 @@ export async function importWorkouts(db: SQLiteDatabase, workouts: ImportedWorko
 
   await db.withTransactionAsync(async () => {
     for (const w of workouts) {
+      // CSV dates are whole seconds, but workouts recorded in the app have milliseconds, so compare
+      // to the second (otherwise re-importing this app's own export would duplicate everything).
+      const second = Math.floor(w.startedAt / 1000) * 1000;
       const dup = await db.getFirstAsync<{ id: number }>(
-        'SELECT id FROM workouts WHERE started_at = ? AND name = ?',
-        w.startedAt,
+        'SELECT id FROM workouts WHERE started_at >= ? AND started_at < ? AND name = ?',
+        second,
+        second + 1000,
         w.name,
       );
       if (dup) {

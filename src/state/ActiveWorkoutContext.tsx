@@ -321,11 +321,16 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       const t = setTimer;
       if (!t) return;
       const duration = Math.max(1, t.duration + delta);
+      // Shortened to less than has already been held: the hold is over now, so finish it with the
+      // time actually held (rather than an end time in the past, which skips the buzz, records the
+      // shorter time and starts the rest late).
+      const heldS = (Date.now() - t.startedAt) / 1000;
+      if (duration <= heldS) return completeTimedSet(t, heldS, false);
       const next = { ...t, duration, endsAt: t.startedAt + duration * 1000 };
       setSetTimer(next);
       scheduleHoldNotifications(next);
     },
-    [setTimer, scheduleHoldNotifications],
+    [completeTimedSet, setTimer, scheduleHoldNotifications],
   );
 
   const finishSetTimer = useCallback(() => {

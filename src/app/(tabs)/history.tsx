@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { SectionList, StyleSheet, Text } from 'react-native';
 
 import { EmptyState } from '@/components/ui';
@@ -19,12 +19,18 @@ export default function HistoryScreen() {
   const [workouts, setWorkouts] = useState<WorkoutDetail[] | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  // How many workouts are loaded. Kept in a ref because the focus callback below is created once
+  // and would otherwise only ever see the first render's (empty) list.
+  const loadedCount = useRef(0);
+  useEffect(() => {
+    loadedCount.current = workouts?.length ?? 0;
+  }, [workouts]);
 
   // Reload the first page (keeping the number already loaded) whenever the tab is focused.
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      const count = Math.max(PAGE, workouts?.length ?? 0);
+      const count = Math.max(PAGE, loadedCount.current);
       listWorkouts(db, count).then((list) => {
         if (!active) return;
         setWorkouts(list);
@@ -33,7 +39,6 @@ export default function HistoryScreen() {
       return () => {
         active = false;
       };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [db]),
   );
 

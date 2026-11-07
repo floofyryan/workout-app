@@ -8,7 +8,7 @@ import { WorkoutEditor } from '@/components/WorkoutEditor';
 import { Button, SectionTitle } from '@/components/ui';
 import { getWorkout, saveWorkout } from '@/db/repo';
 import {
-  completedExercises,
+  editedExercises,
   newActiveSet,
   newKey,
   supersetIdsFromGroups,
@@ -57,7 +57,7 @@ export default function EditWorkoutScreen() {
   if (!draft) return null;
 
   const save = async () => {
-    const done = completedExercises(draft);
+    const done = editedExercises(draft);
     if (done.length === 0) {
       Alert.alert('Nothing to save', 'A workout needs at least one set with values.');
       return;
