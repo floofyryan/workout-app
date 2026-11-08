@@ -217,7 +217,7 @@ export interface Settings {
   /** Notify when rest/hold timers end while the app is in the background or the screen is off. */
   timerNotifications: boolean;
   /** Which figure the exercise body map shows. */
-  bodyMapFigure: 'goblin' | 'male' | 'female';
+  bodyMapFigure: 'male' | 'female';
   gyms: Gym[];
   /** The gym you're training at: exercise lists and swaps stick to its equipment. Null = anywhere. */
   activeGymId: string | null;

@@ -50,7 +50,7 @@ in SQLite.
   from the "Nice work!" summary or from its menu.
 - **Exercises** – ~900 exercises: a hand-curated core set of ~180 plus the rest of
   [free-exercise-db](https://github.com/yuhonas/free-exercise-db). An anatomical front/back **body map**
-  (a little flexing gym goblin by default, or male/female anatomy) lets you tap a muscle to see its exercises. Search, filter by body part and
+  (male or female) lets you tap a muscle to see its exercises. Search, filter by body part and
   equipment, and type (strength, stretching, cardio, plyometrics, Olympic lifting, strongman), sort
   by most used, create custom exercises. Each exercise has **About** (start/end
   photos, muscles, level and step-by-step instructions where available), **History**, **Charts**
@@ -68,7 +68,12 @@ in SQLite.
   Bodyweight exercises and stretches always count as available.
 - **Personal records** – est. 1RM, heaviest weight, best set volume, most reps, longest
   duration/distance, highlighted when a workout beats them.
-- **Profile** – workouts total, this week, week streak, workouts-per-week chart, training calendar.
+- **Profile** – workouts total, this week, week streak, achievements, workouts-per-week chart,
+  training calendar.
+- **Achievements** – milestones worked out from your history: first workout, 10 / 50 / 100
+  workouts, 4 and 12 weeks in a row, 10 t and 100 t lifted, the 100 kg (225 lb) club, early and late
+  sessions. The Profile tab shows what's next and how close you are; the workout summary tells you
+  what a workout unlocked.
 - **Measure** – body weight, body fat and body-part measurements with charts.
 - **Tools** – plate calculator (configurable bar and plates), 1RM calculator with percentage table,
   and an **interval timer** (EMOM, Tabata, your own work / rest, AMRAP with a round counter) that
@@ -138,6 +143,5 @@ Exercise photos and instructions come from
 domain under the Unlicense. The JSON is bundled with the app (refresh it with
 `node scripts/build-free-exercise-db.mjs`); photos are loaded from GitHub and cached on the device.
 
-The goblin body map figure is drawn for this app (`src/data/goblinBody.ts`). The male and
-female figures come from
+The body map figures come from
 [react-native-body-highlighter](https://github.com/HichamELBSI/react-native-body-highlighter) (MIT).

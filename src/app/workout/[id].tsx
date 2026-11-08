@@ -4,13 +4,15 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { AchievementBadge } from '@/components/Achievements';
 import { BlockFeedbackCard } from '@/components/BlockFeedbackCard';
 import { ActionSheet } from '@/components/Sheets';
 import { supersetColors } from '@/components/WorkoutEditor';
 import { ShareCardModal } from '@/components/WorkoutShareCard';
 import { Button, Card, IconButton, Stat } from '@/components/ui';
 import { workoutVolume } from '@/components/WorkoutCard';
-import { deleteWorkout, getRecordsBefore, getWorkout, saveTemplate } from '@/db/repo';
+import { achievementStats, deleteWorkout, getRecordsBefore, getWorkout, saveTemplate } from '@/db/repo';
+import { newlyEarned } from '@/lib/achievements';
 import { computeRecords, estimate1RM, newRecords, RECORD_LABELS, type RecordKey } from '@/lib/calc';
 import { formatDate, formatDuration, formatNumber, formatTime } from '@/lib/format';
 import { useFocusQuery } from '@/lib/hooks';
@@ -73,12 +75,15 @@ export default function WorkoutDetailScreen() {
           prs.set(e.id, newRecords(e.exercise.type, before, computeRecords(e.exercise.type, e.sets)));
         }
       }
-      return { workout, prs };
+      // Right after finishing, see which achievements this workout earned.
+      const stats = summary && workout ? await achievementStats(db) : null;
+      return { workout, prs, stats };
     },
     [id],
   );
   const w = data?.workout;
   const units = settings.units;
+  const unlocked = useMemo(() => (data?.stats ? newlyEarned(data.stats, Number(id), units) : []), [data, id, units]);
 
   if (data && !w) {
     return (
@@ -126,6 +131,20 @@ export default function WorkoutDetailScreen() {
           </View>
           <Button title="Share" icon="share-outline" small variant="secondary" onPress={() => setSharing(true)} />
         </View>
+      )}
+      {unlocked.length > 0 && (
+        <Card style={{ marginBottom: spacing.lg }} onPress={() => router.push('/achievements')}>
+          <Text style={styles.nextTitle}>{unlocked.length === 1 ? 'Achievement unlocked' : 'Achievements unlocked'}</Text>
+          {unlocked.map((a) => (
+            <View key={a.key} style={[styles.nextRow, { alignItems: 'center' }]}>
+              <AchievementBadge achievement={a} size={34} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.text}>{a.title}</Text>
+                <Text style={styles.nextText}>{a.description}</Text>
+              </View>
+            </View>
+          ))}
+        </Card>
       )}
       {summary && feedback === '1' && w.templateId != null ? (
         <BlockFeedbackCard templateId={w.templateId} exercises={w.exercises.map((e) => ({ id: e.exercise.id, name: e.exercise.name }))} />

@@ -5,7 +5,6 @@ import Body, { type ExtendedBodyPart, type Slug } from 'react-native-body-highli
 import { colors, radius, spacing } from '@/lib/theme';
 import type { BodyPart } from '@/lib/types';
 import { useSettings } from '@/state/SettingsContext';
-import { GoblinBody } from './GoblinBody';
 import { Chip } from './ui';
 
 /** Which app body part each muscle on the anatomical figures belongs to. */
@@ -42,7 +41,6 @@ const FIGURE_WIDTH = 200;
 const GAP = 12;
 
 const FIGURES = [
-  { value: 'goblin', label: 'Goblin' },
   { value: 'male', label: 'Male' },
   { value: 'female', label: 'Female' },
 ] as const;
@@ -50,8 +48,7 @@ const FIGURES = [
 /**
  * Anatomical front and back figures; tapping a muscle selects its body part (tapping it again
  * clears the selection). Without `onSelect` it only shows things, e.g. `shading` colours per body
- * part for the recovery map. The goblin is our own (src/data/goblinBody.ts); the male and
- * female figures come from react-native-body-highlighter (MIT).
+ * part for the recovery map. The figures come from react-native-body-highlighter (MIT).
  */
 export function BodyMap({
   selected = null,
@@ -85,32 +82,22 @@ export function BodyMap({
         if (mapped) toggle(mapped);
       }
     : undefined;
-  const figureKind = settings.bodyMapFigure === 'male' || settings.bodyMapFigure === 'female' ? settings.bodyMapFigure : 'goblin';
+  const figureKind = settings.bodyMapFigure;
   const caption =
     captionText ??
     (selected ? `${selected}${counts ? ` · ${counts.get(selected) ?? 0} exercises` : ''}` : onSelect ? 'Tap a muscle' : '');
 
   const figure = (side: 'front' | 'back') => (
     <View style={styles.figure}>
-      {figureKind === 'goblin' ? (
-        <GoblinBody
-          side={side}
-          scale={scale}
-          highlighted={new Set<string>(selectedSlugs)}
-          fills={new Map<string, string>(shaded.map((s) => [s.slug, s.color]))}
-          onPress={onPressSlug}
-        />
-      ) : (
-        <Body
-          data={data}
-          side={side}
-          gender={figureKind}
-          scale={scale}
-          defaultFill="#3B414E"
-          border={colors.faint}
-          onBodyPartPress={onPressSlug ? (part) => onPressSlug(part.slug) : undefined}
-        />
-      )}
+      <Body
+        data={data}
+        side={side}
+        gender={figureKind}
+        scale={scale}
+        defaultFill="#3B414E"
+        border={colors.faint}
+        onBodyPartPress={onPressSlug ? (part) => onPressSlug(part.slug) : undefined}
+      />
       <Text style={styles.sideLabel}>{side === 'front' ? 'FRONT' : 'BACK'}</Text>
     </View>
   );

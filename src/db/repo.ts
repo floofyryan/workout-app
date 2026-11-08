@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { programExercise, type ProgramDef } from '../data/programs';
+import type { WorkoutStat } from '../lib/achievements';
 import { adjustWorkingSets, blockWeek } from '../lib/blocks';
 import { computeRecords, type Records } from '../lib/calc';
 import { guessExercise } from '../lib/exerciseGuess';
@@ -146,7 +147,7 @@ export const DEFAULT_SETTINGS: Settings = {
   vibrateOnRestEnd: true,
   keepScreenOn: true,
   timerNotifications: true,
-  bodyMapFigure: 'goblin',
+  bodyMapFigure: 'male',
   gyms: [],
   activeGymId: null,
 };
@@ -157,7 +158,12 @@ export async function getSettings(db: SQLiteDatabase): Promise<Settings> {
   const raw = await getKv(db, 'settings');
   if (!raw) return DEFAULT_SETTINGS;
   try {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const settings: Settings = { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    // Figures that have been dropped (the old goblin) fall back to the default.
+    if (settings.bodyMapFigure !== 'male' && settings.bodyMapFigure !== 'female') {
+      settings.bodyMapFigure = DEFAULT_SETTINGS.bodyMapFigure;
+    }
+    return settings;
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -669,6 +675,23 @@ export async function getWorkout(db: SQLiteDatabase, id: number): Promise<Workou
   const row = await db.getFirstAsync<WorkoutRow>('SELECT * FROM workouts WHERE id = ?', id);
   if (!row) return null;
   return (await hydrateWorkouts(db, [row]))[0];
+}
+
+/** Per-workout numbers for achievements, oldest first: volume (as shown) and heaviest weight. */
+export async function achievementStats(db: SQLiteDatabase): Promise<WorkoutStat[]> {
+  const rows = await db.getAllAsync<{ id: number; started_at: number; volume: number; heaviest: number | null }>(
+    `SELECT w.id, w.started_at,
+       COALESCE(SUM(CASE WHEN e.type IN ('weight_reps', 'weighted_bodyweight')
+         THEN COALESCE(s.weight, 0) * COALESCE(s.reps, 0) ELSE 0 END), 0) AS volume,
+       MAX(CASE WHEN e.type = 'weight_reps' AND s.reps > 0 AND s.set_type != 'warmup' THEN s.weight END) AS heaviest
+     FROM workouts w
+     LEFT JOIN workout_exercises we ON we.workout_id = w.id
+     LEFT JOIN exercises e ON e.id = we.exercise_id
+     LEFT JOIN workout_sets s ON s.workout_exercise_id = we.id
+     GROUP BY w.id
+     ORDER BY w.started_at`,
+  );
+  return rows.map((r) => ({ id: r.id, startedAt: r.started_at, volume: r.volume, heaviest: r.heaviest }));
 }
 
 export async function workoutCount(db: SQLiteDatabase): Promise<number> {

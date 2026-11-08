@@ -7,6 +7,7 @@ import { parseStrongCsv, workoutsToStrongCsv } from '../lib/strongCsv';
 import type { SetData, Template } from '../lib/types';
 import { KG_PER_LB } from '../lib/units';
 import {
+  achievementStats,
   addMeasurement,
   adjustTemplateSets,
   deleteProgram,
@@ -541,16 +542,70 @@ describe('programs', () => {
     }));
 });
 
+describe('achievement stats', () => {
+  test('volume and heaviest weight per workout, oldest first, workouts without sets included', () =>
+    withDb(async (db) => {
+      const bench = await exerciseId(db, 'Bench Press (Barbell)');
+      const pushUp = await exerciseId(db, 'Push Up (Bodyweight)');
+      const second = await saveWorkout(db, null, {
+        name: 'B',
+        notes: '',
+        startedAt: 2_000,
+        endedAt: 3_000,
+        templateId: null,
+        exercises: [
+          { exerciseId: bench.id, notes: '', sets: [set(120, 1, { setType: 'warmup' }), set(100, 5), set(80, 8)] },
+          { exerciseId: pushUp.id, notes: '', sets: [set(null, 20)] },
+        ],
+      });
+      const first = await saveWorkout(db, null, { name: 'A', notes: '', startedAt: 1_000, endedAt: 1_500, templateId: null, exercises: [] });
+      const rows = await achievementStats(db);
+      assert.deepEqual(rows, [
+        { id: first, startedAt: 1_000, volume: 0, heaviest: null },
+        // Volume counts every set, as on the workout; the heaviest lift ignores warm-ups.
+        { id: second, startedAt: 2_000, volume: 120 + 500 + 640, heaviest: 100 },
+      ]);
+    }));
+
+  test('stays quick with years of history', () =>
+    withDb(async (db) => {
+      const bench = await exerciseId(db, 'Bench Press (Barbell)');
+      const exercises = Array.from({ length: 5 }, () => ({
+        exerciseId: bench.id,
+        notes: '',
+        sets: Array.from({ length: 5 }, () => set(80, 8)),
+      }));
+      for (let i = 0; i < 2000; i++) {
+        await saveWorkout(db, null, { name: 'W', notes: '', startedAt: i * 1000, endedAt: i * 1000 + 500, templateId: null, exercises });
+      }
+      const t0 = performance.now();
+      const rows = await achievementStats(db);
+      const ms = performance.now() - t0;
+      assert.equal(rows.length, 2000);
+      assert.ok(ms < 500, `2000 workouts / 50,000 sets took ${ms.toFixed(0)} ms`);
+    }));
+});
+
 describe('settings, measurements and backups', () => {
   test('settings round trip and fill in defaults', () =>
     withDb(async (db) => {
       const defaults = await getSettings(db);
-      assert.equal(defaults.bodyMapFigure, 'goblin');
+      assert.equal(defaults.bodyMapFigure, 'male');
       assert.equal(defaults.timerNotifications, true);
       await saveSettings(db, { ...defaults, units: 'imperial', timerNotifications: false });
       const saved = await getSettings(db);
       assert.equal(saved.units, 'imperial');
       assert.equal(saved.timerNotifications, false);
+    }));
+
+  test('a saved body map figure that no longer exists falls back to the default', () =>
+    withDb(async (db) => {
+      await db.runAsync("INSERT OR REPLACE INTO kv (key, value) VALUES ('settings', ?)", JSON.stringify({ bodyMapFigure: 'goblin', units: 'imperial' }));
+      const settings = await getSettings(db);
+      assert.equal(settings.bodyMapFigure, 'male');
+      assert.equal(settings.units, 'imperial');
+      await saveSettings(db, { ...settings, bodyMapFigure: 'female' });
+      assert.equal((await getSettings(db)).bodyMapFigure, 'female');
     }));
 
   test('measurements: list newest first and latest per type', () =>

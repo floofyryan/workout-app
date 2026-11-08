@@ -1,11 +1,14 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useNavigation } from 'expo-router';
 import { useLayoutEffect, useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { AchievementBadge, ProgressBar } from '@/components/Achievements';
 import { BarChart } from '@/components/Charts';
 import { Card, IconButton, ListItem, SectionTitle, Stat } from '@/components/ui';
 import { WorkoutCard } from '@/components/WorkoutCard';
-import { listWorkouts, workoutCount, workoutStartTimes } from '@/db/repo';
+import { achievementStats, listWorkouts, workoutCount, workoutStartTimes } from '@/db/repo';
+import { computeAchievements, nextAchievement } from '@/lib/achievements';
 import { formatShortDate, startOfDay, startOfWeek } from '@/lib/format';
 import { useFocusQuery, useNow } from '@/lib/hooks';
 import { colors, radius, spacing } from '@/lib/theme';
@@ -31,8 +34,15 @@ export default function ProfileScreen() {
       total: await workoutCount(db),
       starts: await workoutStartTimes(db, since),
       recent: await listWorkouts(db, 1),
+      achievementStats: await achievementStats(db),
     };
   });
+  const achievements = useMemo(
+    () => (data ? computeAchievements(data.achievementStats, settings.units) : []),
+    [data, settings.units],
+  );
+  const earned = achievements.filter((a) => a.earnedAt != null).sort((a, b) => b.earnedAt! - a.earnedAt!);
+  const next = nextAchievement(achievements);
 
   const now = useNow(60_000);
   const stats = useMemo(() => {
@@ -65,6 +75,40 @@ export default function ProfileScreen() {
         <Stat label="This week" value={String(stats.thisWeek)} />
         <Stat label="Week streak" value={String(stats.streak)} />
       </Card>
+
+      {data && (
+        <>
+          <SectionTitle>Achievements</SectionTitle>
+          <Card onPress={() => router.push('/achievements')}>
+            <View style={styles.achHeader}>
+              <Text style={styles.achCount}>
+                {earned.length} of {achievements.length} earned
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.faint} />
+            </View>
+            {earned.length > 0 && (
+              <View style={styles.badges}>
+                {earned.slice(0, 7).map((a) => (
+                  <AchievementBadge key={a.key} achievement={a} size={34} />
+                ))}
+              </View>
+            )}
+            {next && (
+              <View style={styles.next}>
+                <Text style={styles.nextLabel}>
+                  Next: <Text style={{ color: colors.text, fontWeight: '700' }}>{next.title}</Text> · {next.description}
+                </Text>
+                {next.progressText ? (
+                  <View style={styles.nextProgress}>
+                    <ProgressBar value={next.progress} />
+                    <Text style={styles.nextText}>{next.progressText}</Text>
+                  </View>
+                ) : null}
+              </View>
+            )}
+          </Card>
+        </>
+      )}
 
       <SectionTitle>Workouts per week</SectionTitle>
       <Card>
@@ -147,6 +191,13 @@ function MonthCalendar({ days }: { days: Set<number> }) {
 const styles = StyleSheet.create({
   content: { padding: spacing.lg, paddingTop: 0, paddingBottom: 40 },
   list: { borderRadius: radius.lg, overflow: 'hidden' },
+  achHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  achCount: { color: colors.text, fontSize: 16, fontWeight: '700' },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
+  next: { marginTop: spacing.md },
+  nextLabel: { color: colors.muted, fontSize: 13 },
+  nextProgress: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 6 },
+  nextText: { color: colors.faint, fontSize: 12 },
   calRow: { flexDirection: 'row' },
   calCell: { flex: 1, alignItems: 'center', paddingVertical: 3 },
   calHead: { color: colors.faint, fontSize: 12, fontWeight: '700', textAlign: 'center' },

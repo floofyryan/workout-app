@@ -65,6 +65,7 @@ export default function RootLayout() {
                   <Stack.Screen name="tools/plates" options={{ title: 'Plate Calculator' }} />
                   <Stack.Screen name="tools/one-rep-max" options={{ title: '1RM Calculator' }} />
                   <Stack.Screen name="tools/intervals" options={{ title: 'Interval Timer' }} />
+                  <Stack.Screen name="achievements" options={{ title: 'Achievements' }} />
                 </Stack>
               </ActiveWorkoutProvider>
             </SettingsProvider>
