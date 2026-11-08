@@ -63,6 +63,7 @@ export default function RootLayout() {
                   <Stack.Screen name="settings" options={{ title: 'Settings' }} />
                   <Stack.Screen name="tools/plates" options={{ title: 'Plate Calculator' }} />
                   <Stack.Screen name="tools/one-rep-max" options={{ title: '1RM Calculator' }} />
+                  <Stack.Screen name="tools/intervals" options={{ title: 'Interval Timer' }} />
                 </Stack>
               </ActiveWorkoutProvider>
             </SettingsProvider>

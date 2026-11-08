@@ -58,7 +58,9 @@ in SQLite.
   duration/distance, highlighted when a workout beats them.
 - **Profile** – workouts total, this week, week streak, workouts-per-week chart, training calendar.
 - **Measure** – body weight, body fat and body-part measurements with charts.
-- **Tools** – plate calculator (configurable bar and plates) and 1RM calculator with percentage table.
+- **Tools** – plate calculator (configurable bar and plates), 1RM calculator with percentage table,
+  and an **interval timer** (EMOM, Tabata, your own work / rest, AMRAP with a round counter) that
+  buzzes at every change, ticks down the last seconds, keeps the screen on and alerts you with it off.
 - **Units** – metric or imperial.
 - **Import / export** – import your history from a **Strong, Hevy or FitNotes CSV export** (the
   app is detected from the columns; Hevy supersets come along, FitNotes' built-in exercise names are

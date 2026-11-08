@@ -91,6 +91,7 @@ export default function ProfileScreen() {
       <View style={styles.list}>
         <ListItem icon="disc-outline" title="Plate calculator" onPress={() => router.push('/tools/plates')} />
         <ListItem icon="calculator-outline" title="1RM calculator" onPress={() => router.push('/tools/one-rep-max')} />
+        <ListItem icon="stopwatch-outline" title="Interval timer" onPress={() => router.push('/tools/intervals')} />
         <ListItem icon="settings-outline" title="Settings, import & export" onPress={() => router.push('/settings')} />
       </View>
     </ScrollView>
