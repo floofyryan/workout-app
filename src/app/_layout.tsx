@@ -57,6 +57,8 @@ export default function RootLayout() {
                   <Stack.Screen name="template/[id]" options={{ title: 'Template' }} />
                   <Stack.Screen name="program/[id]" options={{ title: '' }} />
                   <Stack.Screen name="programs" options={{ title: 'Add a Program' }} />
+                  <Stack.Screen name="gyms" options={{ title: 'Gyms' }} />
+                  <Stack.Screen name="gym/[id]" options={{ title: 'Gym' }} />
                   <Stack.Screen name="measurement/[type]" options={{ title: '' }} />
                   <Stack.Screen name="settings" options={{ title: 'Settings' }} />
                   <Stack.Screen name="tools/plates" options={{ title: 'Plate Calculator' }} />

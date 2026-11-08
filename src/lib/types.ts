@@ -192,6 +192,13 @@ export interface WorkoutDetail extends WorkoutSummary {
 
 export type UnitSystem = 'metric' | 'imperial';
 
+/** A place you train and the equipment it has. */
+export interface Gym {
+  id: string;
+  name: string;
+  equipment: Equipment[];
+}
+
 export interface Settings {
   units: UnitSystem;
   defaultRestSeconds: number;
@@ -205,6 +212,9 @@ export interface Settings {
   timerNotifications: boolean;
   /** Which figure the exercise body map shows. */
   bodyMapFigure: 'goblin' | 'male' | 'female';
+  gyms: Gym[];
+  /** The gym you're training at: exercise lists and swaps stick to its equipment. Null = anywhere. */
+  activeGymId: string | null;
 }
 
 export const MEASUREMENT_TYPES = [

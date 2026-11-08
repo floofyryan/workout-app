@@ -1,12 +1,14 @@
+import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { NumberInput } from '@/components/NumberInput';
-import { Button, Card, Chip, SectionTitle } from '@/components/ui';
+import { Button, Card, Chip, ListItem, SectionTitle } from '@/components/ui';
 import { deleteAllWorkouts, exportBackup, exportWorkouts, importWorkouts, restoreBackup } from '@/db/repo';
 import { dateStamp, pickTextFile, shareTextFile } from '@/lib/files';
 import { formatClock, parseNumber } from '@/lib/format';
+import { activeGym } from '@/lib/gyms';
 import { parseStrongCsv, workoutsToStrongCsv } from '@/lib/strongCsv';
 import { colors, radius, spacing } from '@/lib/theme';
 import type { UnitSystem } from '@/lib/types';
@@ -147,6 +149,16 @@ export default function SettingsScreen() {
         </View>
       </Card>
 
+      <SectionTitle>Gym</SectionTitle>
+      <View style={styles.list}>
+        <ListItem
+          icon="barbell-outline"
+          title={activeGym(settings)?.name ?? 'Anywhere (all equipment)'}
+          subtitle="Exercise lists and swaps use this gym's equipment"
+          onPress={() => router.push('/gyms')}
+        />
+      </View>
+
       <SectionTitle>Plate calculator</SectionTitle>
       <Card>
         <View style={styles.switchRow}>
@@ -191,6 +203,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   content: { padding: spacing.lg, paddingTop: 0, paddingBottom: 60 },
   row: { flexDirection: 'row', alignItems: 'center' },
+  list: { borderRadius: radius.lg, overflow: 'hidden' },
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 },
   text: { color: colors.text, fontSize: 15 },
   input: {

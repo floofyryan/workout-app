@@ -9,7 +9,7 @@ import { resolvePicker } from '@/lib/picker';
 import { colors, spacing } from '@/lib/theme';
 
 export default function ExercisePickerScreen() {
-  const { single } = useLocalSearchParams<{ single?: string }>();
+  const { single, replacing } = useLocalSearchParams<{ single?: string; replacing?: string }>();
   const isSingle = single === '1';
   // Keep the order in which exercises were tapped.
   const [selected, setSelected] = useState<number[]>([]);
@@ -32,6 +32,7 @@ export default function ExercisePickerScreen() {
       <ExerciseList
         // Start with the body map folded away so the list is right there; it can be opened.
         initialShowMap={false}
+        similarTo={replacing ? Number(replacing) : undefined}
         selected={new Set(selected)}
         onPress={(e) => {
           if (isSingle) return done([e.id]);

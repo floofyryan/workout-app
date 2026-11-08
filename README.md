@@ -50,6 +50,10 @@ in SQLite.
   (est. 1RM, heaviest weight, volume, reps, duration, distance) and **Records** (PRs plus a 1–12
   rep-max table). Bodyweight exercises are tracked as reps only; "(Weighted)" and "(Assisted)"
   variants track the added or assisting weight.
+- **Gyms** – save the equipment at each place you train (home, work…) and pick where you are:
+  exercise lists then show only what you can do there (one tap shows everything again), and
+  **Replace exercise** suggests stand-ins that work the same muscles with the kit you have.
+  Bodyweight exercises and stretches always count as available.
 - **Personal records** – est. 1RM, heaviest weight, best set volume, most reps, longest
   duration/distance, highlighted when a workout beats them.
 - **Profile** – workouts total, this week, week streak, workouts-per-week chart, training calendar.

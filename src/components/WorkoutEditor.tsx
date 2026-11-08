@@ -182,7 +182,7 @@ export function WorkoutEditor({
         setPickerHandler((ids) => {
           if (ids[0] != null) onChange((w) => replaceExerciseIn(w, item.key, ids[0]));
         });
-        router.push({ pathname: '/exercise-picker', params: { single: '1' } });
+        router.push({ pathname: '/exercise-picker', params: { single: '1', replacing: String(item.exerciseId) } });
       },
     });
     const next = workout.exercises[index + 1];

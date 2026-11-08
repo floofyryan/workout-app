@@ -146,6 +146,8 @@ export const DEFAULT_SETTINGS: Settings = {
   keepScreenOn: true,
   timerNotifications: true,
   bodyMapFigure: 'goblin',
+  gyms: [],
+  activeGymId: null,
 };
 
 export const DEFAULT_IMPERIAL_PLATES = [45, 35, 25, 10, 5, 2.5];
