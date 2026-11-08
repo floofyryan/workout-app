@@ -1,3 +1,5 @@
+import type { BlockWeek } from './blocks';
+
 export const EQUIPMENT = [
   'Barbell',
   'Dumbbell',
@@ -167,6 +169,10 @@ export interface Program {
   templates: Template[];
   /** The workout due next: the one after the last one finished, or the first. */
   nextTemplateId: number | null;
+  /** Weeks in a training block (the last is a deload), or null when it isn't run in blocks. */
+  blockWeeks: number | null;
+  /** Where it is in the current block. */
+  block: BlockWeek | null;
 }
 
 export interface WorkoutSummary {

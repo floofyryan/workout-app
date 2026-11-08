@@ -22,6 +22,7 @@ import {
   workoutFromTemplate,
   type ActiveWorkout,
 } from '@/lib/activeWorkout';
+import type { BlockWeek } from '@/lib/blocks';
 import { defaultWorkoutName } from '@/lib/format';
 import { cancelTimerNotification, scheduleTimerNotification } from '@/lib/timerNotifications';
 import type { Exercise, SetData, Template } from '@/lib/types';
@@ -51,7 +52,8 @@ interface ActiveWorkoutContextValue {
   previous: Map<number, SetData[]>;
   restTimer: RestTimer | null;
   setTimer: SetTimer | null;
-  start: (template?: Template) => void;
+  /** Starts a workout, from a template if given (and its program's block week, if it runs in blocks). */
+  start: (template?: Template, block?: BlockWeek | null) => void;
   update: (fn: (w: ActiveWorkout) => ActiveWorkout) => void;
   toggleSetComplete: (exerciseKey: string, setKey: string) => void;
   startRest: (seconds: number) => void;
@@ -183,14 +185,14 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const start = useCallback(
-    (template?: Template) => {
+    (template?: Template, block?: BlockWeek | null) => {
       const now = Date.now();
       setRestTimer(null);
       setSetTimer(null);
       cancelRestNotification();
       cancelHoldNotification();
       if (template) {
-        setWorkout(workoutFromTemplate(template, now));
+        setWorkout(workoutFromTemplate(template, now, block));
         if (template.id > 0) markTemplateUsed(db, template.id, now);
       } else {
         setWorkout({ name: defaultWorkoutName(now), notes: '', startedAt: now, templateId: null, exercises: [] });

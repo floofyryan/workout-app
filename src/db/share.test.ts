@@ -120,6 +120,18 @@ describe('sharing templates and programs', () => {
         );
         assert.equal(p.nextTemplateId, p.templates[0].id);
         assert.ok(p.templates.every((t) => t.exercises.every((e) => e.progression)));
+        assert.equal(p.blockWeeks, null);
+      });
+    }));
+
+  test('a training block program keeps its block length', () =>
+    withDb(async (mine) => {
+      const id = await installProgram(mine, PROGRAMS.find((p) => p.key === 'muscle-block')!, 'metric');
+      const json = (await exportProgram(mine, id))!;
+      await withDb(async (theirs) => {
+        const p = (await getProgram(theirs, (await importShared(theirs, json)).programId!))!;
+        assert.equal(p.blockWeeks, 5);
+        assert.equal(p.block?.week, 1, 'starting from week 1');
       });
     }));
 

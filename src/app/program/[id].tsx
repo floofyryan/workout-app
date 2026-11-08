@@ -7,8 +7,17 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { ActionSheet, PromptModal } from '@/components/Sheets';
 import { ReorderSheet } from '@/components/Sortable';
-import { Button, Card, IconButton, SectionTitle } from '@/components/ui';
-import { deleteProgram, deleteTemplate, duplicateTemplate, getProgram, renameProgram, reorderTemplates } from '@/db/repo';
+import { Button, Card, IconButton, SectionTitle, type IconName } from '@/components/ui';
+import {
+  deleteProgram,
+  deleteTemplate,
+  duplicateTemplate,
+  getProgram,
+  renameProgram,
+  reorderTemplates,
+  setProgramBlock,
+} from '@/db/repo';
+import { BLOCK_LENGTHS, describeBlockWeek } from '@/lib/blocks';
 import { confirmAsync } from '@/lib/dialog';
 import { useExerciseMap, useFocusQuery } from '@/lib/hooks';
 import { describeProgression, summarizeTargets } from '@/lib/progression';
@@ -26,6 +35,7 @@ export default function ProgramScreen() {
   const [program, reload] = useFocusQuery((db) => getProgram(db, Number(id)), [id]);
   const exercises = useExerciseMap((program?.templates ?? []).flatMap((t) => t.exercises.map((e) => e.exerciseId)));
   const [menu, setMenu] = useState(false);
+  const [blockMenu, setBlockMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [reordering, setReordering] = useState(false);
   const [selected, setSelected] = useState<Template | null>(null);
@@ -54,6 +64,22 @@ export default function ProgramScreen() {
         }}
       />
       {program.notes ? <Text style={styles.notes}>{program.notes}</Text> : null}
+      {program.block ? (
+        <Card style={[styles.blockCard, program.block.deload && { borderColor: colors.warning }]} onPress={() => setBlockMenu(true)}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="calendar-outline" size={18} color={program.block.deload ? colors.warning : colors.success} />
+            <Text style={styles.blockTitle}>
+              Training block {program.block.block} · week {program.block.week} of {program.block.weeks}
+            </Text>
+          </View>
+          <Text style={styles.blockText}>{describeBlockWeek(program.block)}.</Text>
+          <Text style={styles.muted}>
+            {program.block.deload
+              ? 'Weights stay as they are this week. The next block starts after it.'
+              : 'After each workout, say how each exercise felt: next week gets a set more or less.'}
+          </Text>
+        </Card>
+      ) : null}
       <Text style={styles.hint}>
         Do the workouts in turn. When you finish one, exercises with a progression rule set their own targets for next
         time. Edit a workout to change its exercises or rules.
@@ -110,7 +136,7 @@ export default function ProgramScreen() {
         actions={
           selected
             ? [
-                { label: 'Start Workout', icon: 'play', onPress: () => begin(selected) },
+                { label: 'Start Workout', icon: 'play', onPress: () => begin(selected, program.block) },
                 {
                   label: 'Edit Workout',
                   icon: 'create-outline',
@@ -145,6 +171,7 @@ export default function ProgramScreen() {
         onClose={() => setMenu(false)}
         actions={[
           { label: 'Rename', icon: 'pencil-outline', onPress: () => setRenaming(true) },
+          { label: 'Training block…', icon: 'calendar-outline', onPress: () => setBlockMenu(true) },
           {
             label: 'Share program',
             icon: 'share-outline',
@@ -170,6 +197,43 @@ export default function ProgramScreen() {
               router.back();
             },
           },
+        ]}
+      />
+      <ActionSheet
+        visible={blockMenu}
+        title="Training block: weeks that get harder, then a lighter deload week"
+        onClose={() => setBlockMenu(false)}
+        actions={[
+          ...BLOCK_LENGTHS.map((weeks) => ({
+            label: `${weeks} weeks (${weeks - 1} building + deload)`,
+            icon: (program.blockWeeks === weeks ? 'checkmark-circle' : 'ellipse-outline') as IconName,
+            onPress: async () => {
+              if (program.blockWeeks === weeks) return;
+              await setProgramBlock(db, program.id, weeks);
+              reload();
+            },
+          })),
+          ...(program.blockWeeks
+            ? [
+                {
+                  label: 'Restart at week 1',
+                  icon: 'refresh' as const,
+                  onPress: async () => {
+                    await setProgramBlock(db, program.id, program.blockWeeks);
+                    reload();
+                  },
+                },
+                {
+                  label: 'Stop running in blocks',
+                  icon: 'close-circle-outline' as const,
+                  destructive: true,
+                  onPress: async () => {
+                    await setProgramBlock(db, program.id, null);
+                    reload();
+                  },
+                },
+              ]
+            : []),
         ]}
       />
       <PromptModal
@@ -203,6 +267,9 @@ const styles = StyleSheet.create({
   hint: { color: colors.muted, fontSize: 13, marginTop: spacing.sm },
   muted: { color: colors.muted, fontSize: 13 },
   card: { marginBottom: spacing.md, padding: spacing.md },
+  blockCard: { marginTop: spacing.md, padding: spacing.md, borderColor: colors.success, borderWidth: 1 },
+  blockTitle: { color: colors.text, fontWeight: '700', fontSize: 15, flex: 1 },
+  blockText: { color: colors.text, fontSize: 14, marginBottom: 2 },
   nextCard: { borderColor: colors.primary, borderWidth: 1 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs, gap: spacing.sm },
   cardTitle: { color: colors.text, fontWeight: '700', fontSize: 16, flex: 1 },

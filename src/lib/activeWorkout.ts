@@ -1,3 +1,4 @@
+import { deloadSets, type BlockWeek } from './blocks';
 import { progress, type ProgressionResult } from './progression';
 import type { ExerciseType, Progression, SetData, Template, TemplateExercise } from './types';
 
@@ -26,6 +27,8 @@ export interface ActiveWorkout {
   startedAt: number;
   templateId: number | null;
   exercises: ActiveExercise[];
+  /** The training block week this workout is part of, if its program runs in blocks. */
+  block?: BlockWeek | null;
 }
 
 let counter = 0;
@@ -76,25 +79,30 @@ export function supersetGroupsFromIds(ids: (string | null | undefined)[]): (numb
 
 /**
  * A workout ready to do from a template. A template with an id below 1 is an unsaved plan (a
- * repeated or suggested workout), which the workout isn't linked to.
+ * repeated or suggested workout), which the workout isn't linked to. In a training block's deload
+ * week each exercise gets half its working sets.
  */
-export function workoutFromTemplate(template: Template, startedAt: number): ActiveWorkout {
+export function workoutFromTemplate(template: Template, startedAt: number, block?: BlockWeek | null): ActiveWorkout {
   const supersetIds = supersetIdsFromGroups(template.exercises.map((te) => te.supersetGroup));
   return {
     name: template.name,
     notes: '',
     startedAt,
     templateId: template.id > 0 ? template.id : null,
-    exercises: template.exercises.map((te, i) => ({
-      key: newKey(),
-      exerciseId: te.exerciseId,
-      notes: te.notes,
-      restSeconds: te.restSeconds,
-      sets: (te.sets.length ? te.sets : [emptySet()]).map((s) => newActiveSet(s)),
-      supersetId: supersetIds[i],
-      progression: te.progression ?? null,
-      targets: te.progression ? te.sets : null,
-    })),
+    block: block ?? null,
+    exercises: template.exercises.map((te, i) => {
+      const sets = te.sets.length ? te.sets : [emptySet()];
+      return {
+        key: newKey(),
+        exerciseId: te.exerciseId,
+        notes: te.notes,
+        restSeconds: te.restSeconds,
+        sets: (block?.deload ? deloadSets(sets) : sets).map((s) => newActiveSet(s)),
+        supersetId: supersetIds[i],
+        progression: te.progression ?? null,
+        targets: te.progression ? te.sets : null,
+      };
+    }),
   };
 }
 

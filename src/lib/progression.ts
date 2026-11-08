@@ -95,6 +95,8 @@ export function progress(
   // weight and assistance can genuinely be none, so for those a blank means zero, not "not set".
   const optional = type === 'weighted_bodyweight' || type === 'assisted_bodyweight';
   if (!(field === 'weight' && optional) && targetWork.every((t) => t[field] == null)) {
+    // Nothing entered either (sets ticked without a weight): nothing to start from yet.
+    if (doneWork.every((d) => d[field] == null)) return null;
     const last = doneWork[doneWork.length - 1];
     return { outcome: 'start', sets: mapWork((t, d) => ({ ...t, [field]: (d ?? last)[field] })), progression: resetMisses };
   }

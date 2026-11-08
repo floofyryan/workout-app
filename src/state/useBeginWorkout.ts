@@ -2,16 +2,20 @@ import { router } from 'expo-router';
 import { useCallback } from 'react';
 import { Alert } from 'react-native';
 
+import type { BlockWeek } from '@/lib/blocks';
 import type { Template } from '@/lib/types';
 import { useActiveWorkout } from './ActiveWorkoutContext';
 
-/** Starts a workout (from a template, or empty), asking first if one is already in progress. */
+/**
+ * Starts a workout (from a template, or empty), asking first if one is already in progress.
+ * Program workouts pass their program's block week.
+ */
 export function useBeginWorkout() {
   const { workout, start } = useActiveWorkout();
   return useCallback(
-    (template?: Template) => {
+    (template?: Template, block?: BlockWeek | null) => {
       const go = () => {
-        start(template);
+        start(template, block);
         router.push('/active-workout');
       };
       if (!workout) return go();

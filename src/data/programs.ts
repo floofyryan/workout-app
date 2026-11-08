@@ -23,6 +23,8 @@ export interface ProgramDef {
   /** How often it's run, e.g. "3 days a week". */
   schedule: string;
   notes: string;
+  /** Run as a training block of this many weeks (the last a deload). */
+  blockWeeks?: number;
   workouts: { name: string; exercises: ProgramExerciseDef[] }[];
 }
 
@@ -143,6 +145,58 @@ export const PROGRAMS: ProgramDef[] = [
           { name: 'Leg Press (Machine)', sets: 3, reps: 10, maxReps: 15, rest: ACCESSORY },
           { name: 'Lying Leg Curl (Machine)', sets: 3, reps: 10, maxReps: 15, rest: SMALL },
           { name: 'Standing Calf Raise (Machine)', sets: 4, reps: 10, maxReps: 15, rest: SMALL },
+        ],
+      },
+    ],
+  },
+  {
+    key: 'muscle-block',
+    name: 'Muscle Building Block',
+    schedule: '4 days a week, 5-week blocks',
+    notes:
+      'Upper / lower for building muscle, run in 5-week blocks: each week you push a little closer to failure, then a lighter deload week. After each workout, say how each exercise felt and next week gets a set more or less.',
+    blockWeeks: 5,
+    workouts: [
+      {
+        name: 'Upper 1',
+        exercises: [
+          { name: 'Incline Bench Press (Dumbbell)', sets: 3, reps: 8, maxReps: 12, rest: ACCESSORY },
+          { name: 'Seated Row (Cable)', sets: 3, reps: 8, maxReps: 12, rest: ACCESSORY },
+          { name: 'Shoulder Press (Machine)', sets: 3, reps: 8, maxReps: 12, rest: ACCESSORY },
+          { name: 'Lat Pulldown (Cable)', sets: 3, reps: 10, maxReps: 15, rest: ACCESSORY },
+          { name: 'Lateral Raise (Cable)', sets: 2, reps: 12, maxReps: 20, rest: SMALL },
+          { name: 'Bicep Curl (Dumbbell)', sets: 2, reps: 10, maxReps: 15, rest: SMALL },
+        ],
+      },
+      {
+        name: 'Lower 1',
+        exercises: [
+          { name: 'Hack Squat (Machine)', sets: 3, reps: 8, maxReps: 12, rest: ACCESSORY },
+          { name: 'Romanian Deadlift (Dumbbell)', sets: 3, reps: 8, maxReps: 12, rest: ACCESSORY },
+          { name: 'Leg Extension (Machine)', sets: 3, reps: 10, maxReps: 15, rest: SMALL },
+          { name: 'Seated Leg Curl (Machine)', sets: 3, reps: 10, maxReps: 15, rest: SMALL },
+          { name: 'Seated Calf Raise (Machine)', sets: 3, reps: 10, maxReps: 15, rest: SMALL },
+        ],
+      },
+      {
+        name: 'Upper 2',
+        exercises: [
+          { name: 'Chest Press (Machine)', sets: 3, reps: 8, maxReps: 12, rest: ACCESSORY },
+          { name: 'Chest Supported Row (Dumbbell)', sets: 3, reps: 8, maxReps: 12, rest: ACCESSORY },
+          { name: 'Chest Fly (Machine)', sets: 2, reps: 10, maxReps: 15, rest: SMALL },
+          { name: 'Reverse Fly (Machine)', sets: 2, reps: 12, maxReps: 20, rest: SMALL },
+          { name: 'Overhead Triceps Extension (Cable)', sets: 2, reps: 10, maxReps: 15, rest: SMALL },
+          { name: 'Hammer Curl (Dumbbell)', sets: 2, reps: 10, maxReps: 15, rest: SMALL },
+        ],
+      },
+      {
+        name: 'Lower 2',
+        exercises: [
+          { name: 'Leg Press (Machine)', sets: 3, reps: 10, maxReps: 15, rest: ACCESSORY },
+          { name: 'Hip Thrust (Barbell)', sets: 3, reps: 8, maxReps: 12, rest: ACCESSORY },
+          { name: 'Walking Lunge (Dumbbell)', sets: 2, reps: 10, maxReps: 15, rest: ACCESSORY },
+          { name: 'Lying Leg Curl (Machine)', sets: 3, reps: 10, maxReps: 15, rest: SMALL },
+          { name: 'Standing Calf Raise (Machine)', sets: 3, reps: 10, maxReps: 15, rest: SMALL },
         ],
       },
     ],

@@ -17,6 +17,11 @@ in SQLite.
   add weight (or a rep, or 5 s on holds) whenever every set hits its target, with a 10% deload after
   three misses in a row; or work up a rep range (e.g. 8–12) and then add weight. The workout summary
   shows what's set for next time.
+- **Training blocks** – run a program in 4–6 week blocks (the Muscle Building Block program comes set
+  up that way): each week aims a little closer to failure (about 3, 2, 1, then 0 reps in reserve,
+  shown during the workout), and the last week is a deload with half the sets. After each building
+  week's workout, say how each exercise felt: "too easy" adds a set next week, "too much" takes one
+  away. Weeks count finished rounds of the program, so a missed week doesn't skip ahead.
 - **Live workout** – elapsed timer, editable name and notes, and per exercise a
   `SET | PREVIOUS | KG | REPS | ✓` grid:
   - "Previous" shows what you did last time; tap it to copy those values. Ticking a set with blank

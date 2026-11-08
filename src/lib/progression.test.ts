@@ -75,6 +75,9 @@ describe('linear progression', () => {
     const r = progress(linear, 'weight_reps', [s(null, 5), s(null, 5)], [s(60, 5), s(62.5, 5)])!;
     assert.equal(r.outcome, 'start');
     assert.deepEqual(weights(r.sets), [60, 62.5]);
+    // Ticked without entering a weight: nothing to start from (not "0 kg").
+    assert.equal(progress(linear, 'weight_reps', [s(null, 5)], [s(null, 5)]), null);
+    assert.equal(progress(double, 'weight_reps', [s(null, 8)], [s(null, 8)]), null);
   });
 
   it('adds reps for reps-only exercises and time for holds, from the target', () => {

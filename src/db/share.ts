@@ -20,7 +20,16 @@ import {
   type TemplateExercise,
   type TemplateKind,
 } from '../lib/types';
-import { createExercise, createProgram, getExercisesByIds, getProgram, getTemplate, insertTemplate, listExercises } from './repo';
+import {
+  createExercise,
+  createProgram,
+  getExercisesByIds,
+  getProgram,
+  getTemplate,
+  insertTemplate,
+  listExercises,
+  setProgramBlock,
+} from './repo';
 
 const APP = 'workout-app';
 const NOT_SHARED = "That isn't a template or program shared from this app.";
@@ -48,7 +57,7 @@ export interface SharedFile {
   app: typeof APP;
   format: 'template' | 'program';
   version: 1;
-  program?: { name: string; notes: string };
+  program?: { name: string; notes: string; blockWeeks?: number | null };
   templates: SharedTemplate[];
 }
 
@@ -100,7 +109,7 @@ export async function exportProgram(db: SQLiteDatabase, id: number): Promise<str
     app: APP,
     format: 'program',
     version: 1,
-    program: { name: p.name, notes: p.notes },
+    program: { name: p.name, notes: p.notes, blockWeeks: p.blockWeeks },
     templates: await sharedTemplates(db, p.templates),
   });
 }
@@ -164,11 +173,19 @@ export function parseSharedFile(json: string): SharedFile {
   }));
   if (templates.length === 0) throw new Error('That file has no workouts in it.');
   const program = isObject(v.program) ? v.program : {};
+  const weeks = num(program.blockWeeks);
   return {
     app: APP,
     format: v.format,
     version: 1,
-    program: v.format === 'program' ? { name: text(program.name).trim() || 'Shared program', notes: text(program.notes) } : undefined,
+    program:
+      v.format === 'program'
+        ? {
+            name: text(program.name).trim() || 'Shared program',
+            notes: text(program.notes),
+            blockWeeks: weeks != null && weeks >= 2 && weeks <= 12 ? Math.round(weeks) : null,
+          }
+        : undefined,
     templates,
   };
 }
@@ -192,7 +209,10 @@ export async function importShared(db: SQLiteDatabase, json: string): Promise<Sh
     exercisesCreated: 0,
   };
   await db.withTransactionAsync(async () => {
-    if (file.program) result.programId = await createProgram(db, file.program.name, file.program.notes);
+    if (file.program) {
+      result.programId = await createProgram(db, file.program.name, file.program.notes);
+      if (file.program.blockWeeks) await setProgramBlock(db, result.programId, file.program.blockWeeks);
+    }
     for (const t of file.templates) {
       const exercises: TemplateExercise[] = [];
       for (const e of t.exercises) {

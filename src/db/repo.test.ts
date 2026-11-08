@@ -8,6 +8,7 @@ import type { SetData, Template } from '../lib/types';
 import { KG_PER_LB } from '../lib/units';
 import {
   addMeasurement,
+  adjustTemplateSets,
   deleteProgram,
   deleteTemplate,
   duplicateTemplate,
@@ -32,6 +33,7 @@ import {
   saveSettings,
   saveTemplate,
   saveWorkout,
+  setProgramBlock,
   setTemplateFolder,
   workoutCount,
 } from './repo';
@@ -453,6 +455,62 @@ describe('programs', () => {
       assert.equal((await getProgram(db, id))?.nextTemplateId, b.id);
       await finish(b.id, 2_000);
       assert.equal((await getProgram(db, id))?.nextTemplateId, a.id, 'wraps around');
+    }));
+
+  test('training blocks: weeks follow finished rotations, then a deload, then a new block', () =>
+    withDb(async (db) => {
+      const bench = await exerciseId(db, 'Bench Press (Barbell)');
+      const id = await installProgram(db, PROGRAMS.find((p) => p.key === 'muscle-block')!, 'metric');
+      let p = (await getProgram(db, id))!;
+      assert.equal(p.blockWeeks, 5);
+      assert.deepEqual(p.block, { week: 1, weeks: 5, block: 1, rir: 3, deload: false });
+
+      // Four workouts in the rotation: finishing them all moves to week 2.
+      let t = 10_000_000;
+      const finishRotations = async (n: number) => {
+        for (let i = 0; i < n * p.templates.length; i++) {
+          const template = p.templates[i % p.templates.length];
+          t += 1000;
+          await saveWorkout(db, null, {
+            name: template.name,
+            notes: '',
+            startedAt: t,
+            endedAt: t + 500,
+            templateId: template.id,
+            exercises: [{ exerciseId: bench.id, notes: '', sets: [set(60, 10)] }],
+          });
+        }
+      };
+      // Workouts from before the block started don't count.
+      await db.runAsync('UPDATE programs SET block_started_at = ? WHERE id = ?', t + 1, id);
+      await finishRotations(1);
+      assert.deepEqual((await getProgram(db, id))?.block, { week: 2, weeks: 5, block: 1, rir: 2, deload: false });
+      await finishRotations(3);
+      assert.deepEqual((await getProgram(db, id))?.block, { week: 5, weeks: 5, block: 1, rir: null, deload: true });
+      await finishRotations(1);
+      assert.equal((await getProgram(db, id))?.block?.block, 2, 'after the deload a new block starts');
+
+      await setProgramBlock(db, id, 4);
+      assert.deepEqual((await getProgram(db, id))?.block, { week: 1, weeks: 4, block: 1, rir: 3, deload: false });
+      await setProgramBlock(db, id, null);
+      p = (await getProgram(db, id))!;
+      assert.equal(p.block, null);
+      assert.equal(p.blockWeeks, null);
+    }));
+
+  test('block feedback adds or removes a working set of a template exercise', () =>
+    withDb(async (db) => {
+      const id = await installProgram(db, PROGRAMS.find((p) => p.key === 'muscle-block')!, 'metric');
+      const [upper] = (await getProgram(db, id))!.templates;
+      const first = upper.exercises[0];
+      await adjustTemplateSets(db, upper.id, first.exerciseId, 1);
+      let now = (await getTemplate(db, upper.id))!;
+      assert.equal(now.exercises[0].sets.length, first.sets.length + 1);
+      assert.deepEqual(now.exercises[0].progression, first.progression, 'the rule stays');
+      await adjustTemplateSets(db, upper.id, first.exerciseId, -2);
+      now = (await getTemplate(db, upper.id))!;
+      assert.equal(now.exercises[0].sets.length, first.sets.length - 1);
+      assert.equal(now.exercises[1].sets.length, upper.exercises[1].sets.length, 'other exercises untouched');
     }));
 
   test('rules use the unit system, and deleting a program keeps workouts done from it', () =>

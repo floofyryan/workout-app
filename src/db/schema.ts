@@ -180,6 +180,13 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
       ALTER TABLE template_exercises ADD COLUMN progression TEXT;
     `);
   },
+  // v7: programs can run as training blocks (a number of weeks ending in a deload).
+  async (db) => {
+    await db.execAsync(`
+      ALTER TABLE programs ADD COLUMN block_weeks INTEGER;
+      ALTER TABLE programs ADD COLUMN block_started_at INTEGER;
+    `);
+  },
 ];
 
 async function importFreeExerciseDb(db: SQLiteDatabase) {

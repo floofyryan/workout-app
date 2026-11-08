@@ -4,6 +4,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { BlockFeedbackCard } from '@/components/BlockFeedbackCard';
 import { ActionSheet } from '@/components/Sheets';
 import { supersetColors } from '@/components/WorkoutEditor';
 import { ShareCardModal } from '@/components/WorkoutShareCard';
@@ -50,7 +51,12 @@ function asTemplate(w: WorkoutDetail): Omit<Template, 'id' | 'lastUsedAt'> {
 
 export default function WorkoutDetailScreen() {
   const db = useSQLiteContext();
-  const { id, summary, next } = useLocalSearchParams<{ id: string; summary?: string; next?: string }>();
+  const { id, summary, next, feedback } = useLocalSearchParams<{
+    id: string;
+    summary?: string;
+    next?: string;
+    feedback?: string;
+  }>();
   // What the program's progression rules set for next time (passed on when a workout is finished).
   const nextTime = useMemo(() => (summary ? parseNextTime(next) : []), [summary, next]);
   const { settings } = useSettings();
@@ -121,6 +127,9 @@ export default function WorkoutDetailScreen() {
           <Button title="Share" icon="share-outline" small variant="secondary" onPress={() => setSharing(true)} />
         </View>
       )}
+      {summary && feedback === '1' && w.templateId != null ? (
+        <BlockFeedbackCard templateId={w.templateId} exercises={w.exercises.map((e) => ({ id: e.exercise.id, name: e.exercise.name }))} />
+      ) : null}
       {nextTime.length > 0 && (
         <Card style={{ marginBottom: spacing.lg }}>
           <Text style={styles.nextTitle}>Next time</Text>

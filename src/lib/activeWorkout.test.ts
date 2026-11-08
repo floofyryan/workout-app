@@ -51,6 +51,11 @@ describe('active workout editing', () => {
     const w = workoutFromTemplate(template, 1000);
     assert.equal(w.templateId, 1);
     assert.equal(workoutFromTemplate({ ...template, id: -1 }, 1000).templateId, null, 'an unsaved plan is not linked');
+    const deload = { week: 5, weeks: 5, block: 1, rir: null, deload: true };
+    const light = workoutFromTemplate(template, 1000, deload);
+    assert.equal(light.exercises[0].sets.length, 1, 'a deload week halves the working sets');
+    assert.deepEqual(light.block, deload);
+    assert.equal(workoutFromTemplate(template, 1000, { ...deload, week: 2, rir: 2, deload: false }).exercises[0].sets.length, 2);
     assert.equal(w.exercises[0].sets.length, 2);
     assert.equal(w.exercises[0].restSeconds, 90);
     assert.equal(templateChanges(w, template), null);

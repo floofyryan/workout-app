@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { programExercise, type ProgramDef } from '../data/programs';
+import { adjustWorkingSets, blockWeek } from '../lib/blocks';
 import { computeRecords, type Records } from '../lib/calc';
 import { guessExercise } from '../lib/exerciseGuess';
 import { parseProgression } from '../lib/progression';
@@ -431,17 +432,21 @@ export async function markTemplateUsed(db: SQLiteDatabase, id: number, ts: numbe
 
 // ---------- Programs ----------
 
-/** Programs with their workouts in rotation order and the one due next. */
+/** Programs with their workouts in rotation order, the one due next and where any block is at. */
 export async function listPrograms(db: SQLiteDatabase): Promise<Program[]> {
-  const rows = await db.getAllAsync<{ id: number; name: string; notes: string }>(
-    'SELECT id, name, notes FROM programs ORDER BY position, id',
-  );
+  const rows = await db.getAllAsync<{
+    id: number;
+    name: string;
+    notes: string;
+    block_weeks: number | null;
+    block_started_at: number | null;
+  }>('SELECT id, name, notes, block_weeks, block_started_at FROM programs ORDER BY position, id');
   if (rows.length === 0) return [];
   const templates = (await listTemplates(db)).filter((t) => t.programId != null);
   // The last finished workout of each program decides which one is up next (starting one and
-  // then discarding it doesn't move the rotation on).
-  const finished = await db.getAllAsync<{ program_id: number; template_id: number }>(
-    `SELECT t.program_id, w.template_id FROM workouts w JOIN templates t ON t.id = w.template_id
+  // then discarding it doesn't move the rotation on); those since a block started set its week.
+  const finished = await db.getAllAsync<{ program_id: number; template_id: number; started_at: number }>(
+    `SELECT t.program_id, w.template_id, w.started_at FROM workouts w JOIN templates t ON t.id = w.template_id
      WHERE t.program_id IS NOT NULL ORDER BY w.started_at DESC`,
   );
   const last = new Map<number, number>();
@@ -449,8 +454,36 @@ export async function listPrograms(db: SQLiteDatabase): Promise<Program[]> {
   return rows.map((r) => {
     const own = templates.filter((t) => t.programId === r.id);
     const i = own.findIndex((t) => t.id === last.get(r.id));
-    return { ...r, templates: own, nextTemplateId: own.length ? own[(i + 1) % own.length].id : null };
+    const sessions = finished.filter((f) => f.program_id === r.id && f.started_at >= (r.block_started_at ?? 0)).length;
+    return {
+      id: r.id,
+      name: r.name,
+      notes: r.notes,
+      templates: own,
+      nextTemplateId: own.length ? own[(i + 1) % own.length].id : null,
+      blockWeeks: r.block_weeks,
+      block: r.block_weeks ? blockWeek(r.block_weeks, sessions, own.length) : null,
+    };
   });
+}
+
+/** Runs a program as a training block of `weeks` (starting again at week 1 now), or not (null). */
+export async function setProgramBlock(db: SQLiteDatabase, id: number, weeks: number | null) {
+  await db.runAsync(
+    'UPDATE programs SET block_weeks = ?, block_started_at = ? WHERE id = ?',
+    weeks,
+    weeks ? Date.now() : null,
+    id,
+  );
+}
+
+/** Feedback on an exercise in a training block: adds or removes working sets for next time. */
+export async function adjustTemplateSets(db: SQLiteDatabase, templateId: number, exerciseId: number, delta: number) {
+  const t = await getTemplate(db, templateId);
+  const i = t?.exercises.findIndex((e) => e.exerciseId === exerciseId) ?? -1;
+  if (!t || i < 0 || delta === 0) return;
+  const exercises = t.exercises.map((e, j) => (j === i ? { ...e, sets: adjustWorkingSets(e.sets, delta) } : e));
+  await saveTemplate(db, t.id, { name: t.name, notes: t.notes, kind: t.kind, folder: t.folder, exercises });
 }
 
 export async function getProgram(db: SQLiteDatabase, id: number): Promise<Program | null> {
@@ -484,6 +517,7 @@ export async function installProgram(db: SQLiteDatabase, def: ProgramDef, units:
   let programId = 0;
   await db.withTransactionAsync(async () => {
     programId = await createProgram(db, def.name, def.notes);
+    if (def.blockWeeks) await setProgramBlock(db, programId, def.blockWeeks);
     for (const w of def.workouts) {
       const exercises: TemplateExercise[] = [];
       for (const x of w.exercises) {

@@ -22,7 +22,8 @@ import {
 import { confirmAsync } from '@/lib/dialog';
 import { formatClock } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
-import { describeOutcome, type NextTimeLine } from '@/lib/progression';
+import { describeBlockWeek } from '@/lib/blocks';
+import { describeOutcome, type NextTimeLine, type ProgressionResult } from '@/lib/progression';
 import { colors, radius, spacing } from '@/lib/theme';
 import { useActiveWorkout } from '@/state/ActiveWorkoutContext';
 import { useSettings } from '@/state/SettingsContext';
@@ -77,9 +78,13 @@ export default function ActiveWorkoutScreen() {
       if (workout.templateId != null) {
         const template = await getTemplate(db, workout.templateId);
         if (template) {
-          const results = progressWorkout(workout, (exerciseId) => active.exercises.get(exerciseId)?.type);
+          // A deload week's halved sets are on purpose: they don't move targets on or change the template.
+          const deload = !!workout.block?.deload;
+          const results = deload
+            ? new Map<string, ProgressionResult>()
+            : progressWorkout(workout, (exerciseId) => active.exercises.get(exerciseId)?.type);
           let exercises = results.size > 0 ? progressedTemplate(template, workout, results) : null;
-          const changes = templateChanges(workout, template);
+          const changes = deload ? null : templateChanges(workout, template);
           if (changes) {
             const updateTemplate = await confirmAsync(
               'Update template?',
@@ -116,6 +121,8 @@ export default function ActiveWorkoutScreen() {
         }
         const params: Record<string, string> = { id: String(id), summary: '1' };
         if (nextTime.length > 0) params.next = JSON.stringify(nextTime);
+        // In a training block's building weeks, ask how each exercise felt.
+        if (workout.block && !workout.block.deload && workout.templateId != null) params.feedback = '1';
         router.replace({ pathname: '/workout/[id]', params });
         return;
       }
@@ -174,6 +181,16 @@ export default function ActiveWorkoutScreen() {
                   placeholderTextColor={colors.faint}
                   multiline
                 />
+                {workout.block ? (
+                  <View style={[styles.block, workout.block.deload && styles.deload]}>
+                    <Ionicons
+                      name="calendar-outline"
+                      size={15}
+                      color={workout.block.deload ? colors.warning : colors.success}
+                    />
+                    <Text style={styles.blockText}>{describeBlockWeek(workout.block)}</Text>
+                  </View>
+                ) : null}
               </View>
             }
             footer={<Button title="Cancel Workout" variant="danger" onPress={onCancel} style={{ marginTop: spacing.md }} />}
@@ -199,4 +216,15 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg, paddingTop: spacing.sm, paddingBottom: 200 },
   name: { color: colors.text, fontSize: 24, fontWeight: '700', paddingVertical: 4 },
   notes: { color: colors.muted, fontSize: 15, paddingVertical: 4 },
+  block: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radius.sm,
+    backgroundColor: 'rgba(34,197,94,0.12)',
+  },
+  deload: { backgroundColor: 'rgba(245,158,11,0.12)' },
+  blockText: { color: colors.text, fontSize: 13, flexShrink: 1 },
 });

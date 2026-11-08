@@ -9,6 +9,7 @@ import { ActionSheet, PromptModal } from '@/components/Sheets';
 import { ReorderSheet } from '@/components/Sortable';
 import { Button, Card, SectionTitle } from '@/components/ui';
 import { deleteTemplate, duplicateTemplate, listPrograms, listTemplates, reorderTemplates, setTemplateFolder } from '@/db/repo';
+import { describeBlockWeek, type BlockWeek } from '@/lib/blocks';
 import { formatClock } from '@/lib/format';
 import { useExerciseMap, useFocusQuery } from '@/lib/hooks';
 import { summarizeTargets } from '@/lib/progression';
@@ -188,9 +189,10 @@ function ProgramCard({
   program: Program;
   exercises: Map<number, Exercise>;
   units: UnitSystem;
-  onStart: (t: Template) => void;
+  onStart: (t: Template, block: BlockWeek | null) => void;
 }) {
   const next = program.templates.find((t) => t.id === program.nextTemplateId);
+  const block = program.block;
   return (
     <Card
       style={styles.programCard}
@@ -205,6 +207,11 @@ function ProgramCard({
       {next ? (
         <>
           <Text style={styles.upNext}>Up next: {next.name}</Text>
+          {block ? (
+            <Text style={[styles.templateLine, { color: block.deload ? colors.warning : colors.success, marginBottom: 2 }]}>
+              {describeBlockWeek(block)}
+            </Text>
+          ) : null}
           {next.exercises.map((e, i) => {
             const ex = exercises.get(e.exerciseId);
             return (
@@ -216,7 +223,7 @@ function ProgramCard({
               </View>
             );
           })}
-          <Button title={`Start ${next.name}`} icon="play" small onPress={() => onStart(next)} style={styles.programStart} />
+          <Button title={`Start ${next.name}`} icon="play" small onPress={() => onStart(next, block)} style={styles.programStart} />
         </>
       ) : (
         <Text style={styles.templateLine}>No workouts yet. Open the program to add one.</Text>
