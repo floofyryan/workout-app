@@ -6,7 +6,8 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 
 import { ActionSheet } from '@/components/Sheets';
 import { supersetColors } from '@/components/WorkoutEditor';
-import { Card, IconButton, Stat } from '@/components/ui';
+import { ShareCardModal } from '@/components/WorkoutShareCard';
+import { Button, Card, IconButton, Stat } from '@/components/ui';
 import { workoutVolume } from '@/components/WorkoutCard';
 import { deleteWorkout, getRecordsBefore, getWorkout, saveTemplate } from '@/db/repo';
 import { computeRecords, estimate1RM, newRecords, RECORD_LABELS, type RecordKey } from '@/lib/calc';
@@ -55,6 +56,7 @@ export default function WorkoutDetailScreen() {
   const { settings } = useSettings();
   const active = useActiveWorkout();
   const [menu, setMenu] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [data] = useFocusQuery(
     async (db) => {
       const workout = await getWorkout(db, Number(id));
@@ -117,6 +119,7 @@ export default function WorkoutDetailScreen() {
               {totalPrs > 0 ? `You set ${totalPrs} personal record${totalPrs === 1 ? '' : 's'}.` : 'Workout saved.'}
             </Text>
           </View>
+          <Button title="Share" icon="share-outline" small variant="secondary" onPress={() => setSharing(true)} />
         </View>
       )}
       {nextTime.length > 0 && (
@@ -192,6 +195,7 @@ export default function WorkoutDetailScreen() {
         onClose={() => setMenu(false)}
         title={w.name}
         actions={[
+          { label: 'Share as image', icon: 'image-outline', onPress: () => setSharing(true) },
           { label: 'Repeat workout', icon: 'repeat', onPress: repeat },
           {
             label: 'Edit workout',
@@ -225,6 +229,7 @@ export default function WorkoutDetailScreen() {
           },
         ]}
       />
+      <ShareCardModal visible={sharing} onClose={() => setSharing(false)} workout={w} prs={data.prs} units={units} />
     </ScrollView>
   );
 }

@@ -40,7 +40,9 @@ in SQLite.
 - **Tracking types** – weight & reps, reps only, weighted bodyweight (+kg), assisted bodyweight
   (−kg), duration, distance & duration.
 - **History** – workouts grouped by month with "Exercise | Best set" summaries; open one to see
-  every set, estimated 1RMs and PRs; edit, repeat, save as template, or delete it.
+  every set, estimated 1RMs and PRs; edit, repeat, save as template, or delete it. **Share** a
+  workout as an image card (name, time, volume, sets, records and each exercise's best set), right
+  from the "Nice work!" summary or from its menu.
 - **Exercises** – ~900 exercises: a hand-curated core set of ~180 plus the rest of
   [free-exercise-db](https://github.com/yuhonas/free-exercise-db). An anatomical front/back **body map**
   (a little flexing gym goblin by default, or male/female anatomy) lets you tap a muscle to see its exercises. Search, filter by body part and

@@ -1,6 +1,8 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import type { View } from 'react-native';
+import { captureRef } from 'react-native-view-shot';
 
 /** Lets the user pick a file and returns its text, or null if cancelled. */
 export async function pickTextFile(types: string[]): Promise<string | null> {
@@ -23,6 +25,13 @@ export async function shareTextFile(filename: string, content: string, mimeType:
   } else {
     throw new Error('Sharing is not available on this device.');
   }
+}
+
+/** Takes a picture of a view (PNG) and opens the share sheet with it. */
+export async function shareViewAsImage(view: View, title: string) {
+  if (!(await Sharing.isAvailableAsync())) throw new Error('Sharing is not available on this device.');
+  const uri = await captureRef(view, { format: 'png', quality: 1, result: 'tmpfile' });
+  await Sharing.shareAsync(uri, { mimeType: 'image/png', UTI: 'public.png', dialogTitle: title });
 }
 
 export function dateStamp(): string {
