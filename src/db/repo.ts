@@ -1,7 +1,9 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { programExercise, type ProgramDef } from '../data/programs';
 import { computeRecords, type Records } from '../lib/calc';
 import { guessExercise } from '../lib/exerciseGuess';
+import { parseProgression } from '../lib/progression';
 import type { ImportedWorkout } from '../lib/strongCsv';
 import type {
   BodyPart,
@@ -10,12 +12,14 @@ import type {
   ExerciseType,
   Measurement,
   MeasurementType,
+  Program,
   SetData,
   SetType,
   Settings,
   Template,
   TemplateExercise,
   TemplateKind,
+  UnitSystem,
   WorkoutDetail,
   WorkoutExerciseDetail,
   WorkoutSummary,
@@ -253,6 +257,7 @@ interface TemplateRow {
   notes: string;
   kind: string;
   folder: string | null;
+  program_id: number | null;
   last_used_at: number | null;
 }
 
@@ -265,6 +270,7 @@ interface TemplateExerciseRow {
   notes: string;
   sets_json: string;
   superset_group: number | null;
+  progression: string | null;
 }
 
 function parseSets(json: string): SetData[] {
@@ -276,30 +282,40 @@ function parseSets(json: string): SetData[] {
   }
 }
 
+function toTemplateExercise(r: TemplateExerciseRow): TemplateExercise {
+  return {
+    exerciseId: r.exercise_id,
+    restSeconds: r.rest_seconds,
+    notes: r.notes,
+    sets: parseSets(r.sets_json),
+    supersetGroup: r.superset_group,
+    progression: parseProgression(r.progression),
+  };
+}
+
+function toTemplate(r: TemplateRow, exercises: TemplateExercise[]): Template {
+  return {
+    id: r.id,
+    name: r.name,
+    notes: r.notes,
+    kind: toKind(r.kind),
+    folder: r.folder,
+    programId: r.program_id,
+    lastUsedAt: r.last_used_at,
+    exercises,
+  };
+}
+
 export async function listTemplates(db: SQLiteDatabase): Promise<Template[]> {
   const rows = await db.getAllAsync<TemplateRow>('SELECT * FROM templates ORDER BY position, id');
   const exRows = await db.getAllAsync<TemplateExerciseRow>('SELECT * FROM template_exercises ORDER BY template_id, position');
   const byTemplate = new Map<number, TemplateExercise[]>();
   for (const r of exRows) {
     const list = byTemplate.get(r.template_id) ?? [];
-    list.push({
-      exerciseId: r.exercise_id,
-      restSeconds: r.rest_seconds,
-      notes: r.notes,
-      sets: parseSets(r.sets_json),
-      supersetGroup: r.superset_group,
-    });
+    list.push(toTemplateExercise(r));
     byTemplate.set(r.template_id, list);
   }
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    notes: r.notes,
-    kind: toKind(r.kind),
-    folder: r.folder,
-    lastUsedAt: r.last_used_at,
-    exercises: byTemplate.get(r.id) ?? [],
-  }));
+  return rows.map((r) => toTemplate(r, byTemplate.get(r.id) ?? []));
 }
 
 export async function getTemplate(db: SQLiteDatabase, id: number): Promise<Template | null> {
@@ -309,21 +325,7 @@ export async function getTemplate(db: SQLiteDatabase, id: number): Promise<Templ
     'SELECT * FROM template_exercises WHERE template_id = ? ORDER BY position',
     id,
   );
-  return {
-    id: r.id,
-    name: r.name,
-    notes: r.notes,
-    kind: toKind(r.kind),
-    folder: r.folder,
-    lastUsedAt: r.last_used_at,
-    exercises: exRows.map((e) => ({
-      exerciseId: e.exercise_id,
-      restSeconds: e.rest_seconds,
-      notes: e.notes,
-      sets: parseSets(e.sets_json),
-      supersetGroup: e.superset_group,
-    })),
-  };
+  return toTemplate(r, exRows.map(toTemplateExercise));
 }
 
 export interface TemplateInput {
@@ -331,7 +333,42 @@ export interface TemplateInput {
   notes: string;
   kind: TemplateKind;
   folder?: string | null;
+  /** Program to add a new template to (an existing template stays where it is). */
+  programId?: number | null;
   exercises: TemplateExercise[];
+}
+
+async function writeTemplateExercises(db: SQLiteDatabase, templateId: number, exercises: TemplateExercise[]) {
+  for (const [i, e] of exercises.entries()) {
+    await db.runAsync(
+      'INSERT INTO template_exercises (template_id, exercise_id, position, rest_seconds, notes, sets_json, superset_group, progression) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      templateId,
+      e.exerciseId,
+      i,
+      e.restSeconds,
+      e.notes,
+      JSON.stringify(e.sets),
+      e.supersetGroup ?? null,
+      e.progression ? JSON.stringify(e.progression) : null,
+    );
+  }
+}
+
+/** Inserts a template (callers provide the transaction). */
+async function insertTemplate(db: SQLiteDatabase, t: TemplateInput): Promise<number> {
+  const pos = await db.getFirstAsync<{ p: number | null }>('SELECT MAX(position) AS p FROM templates');
+  const res = await db.runAsync(
+    'INSERT INTO templates (name, notes, kind, folder, program_id, position, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    t.name.trim() || 'New Template',
+    t.notes,
+    t.kind,
+    cleanFolder(t.folder),
+    t.programId ?? null,
+    (pos?.p ?? -1) + 1,
+    Date.now(),
+  );
+  await writeTemplateExercises(db, res.lastInsertRowId, t.exercises);
+  return res.lastInsertRowId;
 }
 
 /** Creates (id = null) or replaces a template. Returns its id. */
@@ -339,40 +376,19 @@ export async function saveTemplate(db: SQLiteDatabase, id: number | null, t: Tem
   let templateId = id;
   await db.withTransactionAsync(async () => {
     if (templateId == null) {
-      const pos = await db.getFirstAsync<{ p: number | null }>('SELECT MAX(position) AS p FROM templates');
-      const res = await db.runAsync(
-        'INSERT INTO templates (name, notes, kind, folder, position, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-        t.name.trim() || 'New Template',
-        t.notes,
-        t.kind,
-        cleanFolder(t.folder),
-        (pos?.p ?? -1) + 1,
-        Date.now(),
-      );
-      templateId = res.lastInsertRowId;
-    } else {
-      await db.runAsync(
-        'UPDATE templates SET name = ?, notes = ?, kind = ?, folder = ? WHERE id = ?',
-        t.name.trim() || 'Template',
-        t.notes,
-        t.kind,
-        cleanFolder(t.folder),
-        templateId,
-      );
-      await db.runAsync('DELETE FROM template_exercises WHERE template_id = ?', templateId);
+      templateId = await insertTemplate(db, t);
+      return;
     }
-    for (const [i, e] of t.exercises.entries()) {
-      await db.runAsync(
-        'INSERT INTO template_exercises (template_id, exercise_id, position, rest_seconds, notes, sets_json, superset_group) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        templateId,
-        e.exerciseId,
-        i,
-        e.restSeconds,
-        e.notes,
-        JSON.stringify(e.sets),
-        e.supersetGroup ?? null,
-      );
-    }
+    await db.runAsync(
+      'UPDATE templates SET name = ?, notes = ?, kind = ?, folder = ? WHERE id = ?',
+      t.name.trim() || 'Template',
+      t.notes,
+      t.kind,
+      cleanFolder(t.folder),
+      templateId,
+    );
+    await db.runAsync('DELETE FROM template_exercises WHERE template_id = ?', templateId);
+    await writeTemplateExercises(db, templateId, t.exercises);
   });
   return templateId!;
 }
@@ -384,7 +400,14 @@ export async function deleteTemplate(db: SQLiteDatabase, id: number) {
 export async function duplicateTemplate(db: SQLiteDatabase, id: number): Promise<number | null> {
   const t = await getTemplate(db, id);
   if (!t) return null;
-  return saveTemplate(db, null, { name: `${t.name} (copy)`, notes: t.notes, kind: t.kind, folder: t.folder, exercises: t.exercises });
+  return saveTemplate(db, null, {
+    name: `${t.name} (copy)`,
+    notes: t.notes,
+    kind: t.kind,
+    folder: t.folder,
+    programId: t.programId,
+    exercises: t.exercises,
+  });
 }
 
 const cleanFolder = (folder: string | null | undefined) => folder?.trim() || null;
@@ -402,6 +425,73 @@ export async function reorderTemplates(db: SQLiteDatabase, ids: number[]) {
 
 export async function markTemplateUsed(db: SQLiteDatabase, id: number, ts: number) {
   await db.runAsync('UPDATE templates SET last_used_at = ? WHERE id = ?', ts, id);
+}
+
+// ---------- Programs ----------
+
+/** Programs with their workouts in rotation order and the one due next. */
+export async function listPrograms(db: SQLiteDatabase): Promise<Program[]> {
+  const rows = await db.getAllAsync<{ id: number; name: string; notes: string }>(
+    'SELECT id, name, notes FROM programs ORDER BY position, id',
+  );
+  if (rows.length === 0) return [];
+  const templates = (await listTemplates(db)).filter((t) => t.programId != null);
+  // The last finished workout of each program decides which one is up next (starting one and
+  // then discarding it doesn't move the rotation on).
+  const finished = await db.getAllAsync<{ program_id: number; template_id: number }>(
+    `SELECT t.program_id, w.template_id FROM workouts w JOIN templates t ON t.id = w.template_id
+     WHERE t.program_id IS NOT NULL ORDER BY w.started_at DESC`,
+  );
+  const last = new Map<number, number>();
+  for (const r of finished) if (!last.has(r.program_id)) last.set(r.program_id, r.template_id);
+  return rows.map((r) => {
+    const own = templates.filter((t) => t.programId === r.id);
+    const i = own.findIndex((t) => t.id === last.get(r.id));
+    return { ...r, templates: own, nextTemplateId: own.length ? own[(i + 1) % own.length].id : null };
+  });
+}
+
+export async function getProgram(db: SQLiteDatabase, id: number): Promise<Program | null> {
+  return (await listPrograms(db)).find((p) => p.id === id) ?? null;
+}
+
+export async function createProgram(db: SQLiteDatabase, name: string, notes = ''): Promise<number> {
+  const pos = await db.getFirstAsync<{ p: number | null }>('SELECT MAX(position) AS p FROM programs');
+  const res = await db.runAsync(
+    'INSERT INTO programs (name, notes, position, created_at) VALUES (?, ?, ?, ?)',
+    name.trim() || 'New Program',
+    notes,
+    (pos?.p ?? -1) + 1,
+    Date.now(),
+  );
+  return res.lastInsertRowId;
+}
+
+export async function renameProgram(db: SQLiteDatabase, id: number, name: string) {
+  await db.runAsync('UPDATE programs SET name = ? WHERE id = ?', name.trim() || 'Program', id);
+}
+
+/** Deletes a program and its workouts (past workouts done from them are kept). */
+export async function deleteProgram(db: SQLiteDatabase, id: number) {
+  await db.runAsync('DELETE FROM programs WHERE id = ?', id);
+}
+
+/** Adds a program from the library; its workouts become templates with progression rules. */
+export async function installProgram(db: SQLiteDatabase, def: ProgramDef, units: UnitSystem): Promise<number> {
+  const byName = new Map((await listExercises(db, true)).map((e) => [e.name.toLowerCase(), e]));
+  let programId = 0;
+  await db.withTransactionAsync(async () => {
+    programId = await createProgram(db, def.name, def.notes);
+    for (const w of def.workouts) {
+      const exercises: TemplateExercise[] = [];
+      for (const x of w.exercises) {
+        const ex = byName.get(x.name.toLowerCase());
+        if (ex) exercises.push(programExercise(x, ex.id, ex.type, units));
+      }
+      await insertTemplate(db, { name: w.name, notes: '', kind: 'workout', programId, exercises });
+    }
+  });
+  return programId;
 }
 
 // ---------- Workouts ----------
@@ -728,6 +818,7 @@ export async function exportWorkouts(db: SQLiteDatabase): Promise<ImportedWorkou
 
 const BACKUP_TABLES = [
   'exercises',
+  'programs',
   'templates',
   'template_exercises',
   'workouts',

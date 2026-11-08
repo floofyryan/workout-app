@@ -1,7 +1,7 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { WorkoutEditor } from '@/components/WorkoutEditor';
 import { Button, Chip } from '@/components/ui';
@@ -14,9 +14,15 @@ import { useUnsavedChangesGuard } from '@/lib/useUnsavedChangesGuard';
 
 export default function TemplateEditorScreen() {
   const db = useSQLiteContext();
-  const { id, kind: kindParam } = useLocalSearchParams<{ id: string; kind?: string }>();
+  const { id, kind: kindParam, programId: programParam } = useLocalSearchParams<{
+    id: string;
+    kind?: string;
+    programId?: string;
+  }>();
   const isNew = id === 'new';
   const [kind, setKind] = useState<TemplateKind>(kindParam === 'stretch' ? 'stretch' : 'workout');
+  // Program workouts are listed under their program rather than in folders.
+  const [programId, setProgramId] = useState<number | null>(programParam ? Number(programParam) : null);
   const [draft, setDraft] = useState<ActiveWorkout | null>(
     isNew ? { name: '', notes: '', startedAt: 0, templateId: null, exercises: [] } : null,
   );
@@ -35,6 +41,7 @@ export default function TemplateEditorScreen() {
       setDraft(loaded);
       setKind(t.kind);
       setFolder(t.folder ?? '');
+      setProgramId(t.programId);
       setOriginal(JSON.stringify({ draft: loaded, kind: t.kind, folder: t.folder ?? '' }));
     });
   }, [db, id, isNew]);
@@ -50,7 +57,8 @@ export default function TemplateEditorScreen() {
       name: draft.name,
       notes: draft.notes,
       kind,
-      folder,
+      folder: programId == null ? folder : null,
+      programId,
       exercises: templateExercisesFromWorkout(draft),
     });
     leave();
@@ -60,7 +68,7 @@ export default function TemplateEditorScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
       <Stack.Screen
         options={{
-          title: `${isNew ? 'New' : 'Edit'} ${kind === 'stretch' ? 'Stretch Routine' : 'Template'}`,
+          title: `${isNew ? 'New' : 'Edit'} ${programId != null ? 'Program Workout' : kind === 'stretch' ? 'Stretch Routine' : 'Template'}`,
           headerRight: () => <Button title="Save" small onPress={save} />,
         }}
       />
@@ -92,13 +100,19 @@ export default function TemplateEditorScreen() {
                 <Chip label="Workout" selected={kind === 'workout'} onPress={() => setKind('workout')} />
                 <Chip label="Stretch" selected={kind === 'stretch'} onPress={() => setKind('stretch')} />
               </View>
-              <TextInput
-                value={folder}
-                onChangeText={setFolder}
-                placeholder="Folder (optional), e.g. PPL or Mobility"
-                placeholderTextColor={colors.faint}
-                style={styles.folder}
-              />
+              {programId == null ? (
+                <TextInput
+                  value={folder}
+                  onChangeText={setFolder}
+                  placeholder="Folder (optional), e.g. PPL or Mobility"
+                  placeholderTextColor={colors.faint}
+                  style={styles.folder}
+                />
+              ) : (
+                <Text style={styles.hint}>
+                  Tap ••• on an exercise to give it a progression rule, so its targets move on after each workout.
+                </Text>
+              )}
             </View>
           }
         />
@@ -112,6 +126,7 @@ const styles = StyleSheet.create({
   name: { color: colors.text, fontSize: 24, fontWeight: '700', paddingVertical: 4 },
   notes: { color: colors.muted, fontSize: 15, paddingVertical: 4 },
   kinds: { flexDirection: 'row', marginTop: spacing.sm },
+  hint: { color: colors.muted, fontSize: 13, marginTop: spacing.sm },
   folder: {
     color: colors.text,
     fontSize: 15,

@@ -10,16 +10,19 @@ import { RestTimerBar } from '@/components/RestTimerBar';
 import { SetTimerBar } from '@/components/SetTimerBar';
 import { WorkoutEditor } from '@/components/WorkoutEditor';
 import { Button } from '@/components/ui';
-import { getTemplate, saveTemplate } from '@/db/repo';
+import { getTemplate, saveTemplate, type TemplateInput } from '@/db/repo';
 import {
   completedExercises,
   countIncompleteSets,
+  progressedTemplate,
+  progressWorkout,
   templateChanges,
   templateExercisesFromWorkout,
 } from '@/lib/activeWorkout';
 import { confirmAsync } from '@/lib/dialog';
 import { formatClock } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
+import { describeOutcome, type NextTimeLine } from '@/lib/progression';
 import { colors, radius, spacing } from '@/lib/theme';
 import { useActiveWorkout } from '@/state/ActiveWorkoutContext';
 import { useSettings } from '@/state/SettingsContext';
@@ -67,34 +70,53 @@ export default function ActiveWorkoutScreen() {
 
     setSaving(true);
     try {
+      // Work out the template's next version first (asking if anything besides the progression
+      // rules changed), but only write it once the workout itself is saved.
+      let templateUpdate: { id: number; input: TemplateInput } | null = null;
+      let nextTime: NextTimeLine[] = [];
       if (workout.templateId != null) {
         const template = await getTemplate(db, workout.templateId);
-        const changes = template ? templateChanges(workout, template) : null;
-        if (template && changes) {
-          const updateTemplate = await confirmAsync(
-            'Update template?',
-            changes === 'exercises'
-              ? `You changed the exercises or sets compared to "${template.name}". Update the template to match, including today's weights and reps?`
-              : `Save today's weights and reps to "${template.name}" so they're filled in next time?`,
-            'Update template',
-            false,
-            'Keep as is',
-          );
-          if (updateTemplate) {
-            await saveTemplate(db, template.id, {
-              name: template.name,
-              notes: template.notes,
-              kind: template.kind,
-              folder: template.folder,
-              exercises: templateExercisesFromWorkout(workout),
-            });
+        if (template) {
+          const results = progressWorkout(workout, (exerciseId) => active.exercises.get(exerciseId)?.type);
+          let exercises = results.size > 0 ? progressedTemplate(template, workout, results) : null;
+          const changes = templateChanges(workout, template);
+          if (changes) {
+            const updateTemplate = await confirmAsync(
+              'Update template?',
+              changes === 'exercises'
+                ? `You changed the exercises or sets compared to "${template.name}". Update the template to match, including today's weights and reps?`
+                : `Save today's weights and reps to "${template.name}" so they're filled in next time?`,
+              'Update template',
+              false,
+              'Keep as is',
+            );
+            if (updateTemplate) exercises = templateExercisesFromWorkout(workout, results);
           }
+          if (exercises) {
+            const { name, notes, kind, folder } = template;
+            templateUpdate = { id: template.id, input: { name, notes, kind, folder, exercises } };
+          }
+          nextTime = workout.exercises.flatMap((e) => {
+            const r = results.get(e.key);
+            const ex = active.exercises.get(e.exerciseId);
+            return r && ex ? [{ name: ex.name, outcome: r.outcome, text: describeOutcome(r, ex.type, settings.units) }] : [];
+          });
         }
       }
       finishing.current = true;
       const id = await finish();
       if (id != null) {
-        router.replace({ pathname: '/workout/[id]', params: { id: String(id), summary: '1' } });
+        if (templateUpdate) {
+          try {
+            await saveTemplate(db, templateUpdate.id, templateUpdate.input);
+          } catch (e) {
+            nextTime = [];
+            Alert.alert('Workout saved', `But the template could not be updated: ${String(e)}`);
+          }
+        }
+        const params: Record<string, string> = { id: String(id), summary: '1' };
+        if (nextTime.length > 0) params.next = JSON.stringify(nextTime);
+        router.replace({ pathname: '/workout/[id]', params });
         return;
       }
       finishing.current = false;

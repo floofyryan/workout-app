@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ActionSheet } from '@/components/Sheets';
@@ -12,12 +12,21 @@ import { deleteWorkout, getRecordsBefore, getWorkout, saveTemplate } from '@/db/
 import { computeRecords, estimate1RM, newRecords, RECORD_LABELS, type RecordKey } from '@/lib/calc';
 import { formatDate, formatDuration, formatNumber, formatTime } from '@/lib/format';
 import { useFocusQuery } from '@/lib/hooks';
+import { parseNextTime, type ProgressionOutcome } from '@/lib/progression';
 import { formatSet, SET_TYPE_LABEL } from '@/lib/setFormat';
 import { colors, radius, spacing } from '@/lib/theme';
 import { exerciseCategory, type Template, type WorkoutDetail } from '@/lib/types';
 import { formatWeight, kgToDisplay, weightUnit } from '@/lib/units';
 import { useActiveWorkout } from '@/state/ActiveWorkoutContext';
 import { useSettings } from '@/state/SettingsContext';
+
+const OUTCOME_ICON: Record<ProgressionOutcome, { name: React.ComponentProps<typeof Ionicons>['name']; color: string }> = {
+  start: { name: 'flag', color: colors.primary },
+  up: { name: 'arrow-up-circle', color: colors.success },
+  reps: { name: 'add-circle', color: colors.success },
+  same: { name: 'repeat', color: colors.muted },
+  deload: { name: 'arrow-down-circle', color: colors.warning },
+};
 
 /** Converts a finished workout into an unsaved template (for "repeat" and "save as template"). */
 function asTemplate(w: WorkoutDetail): Omit<Template, 'id' | 'lastUsedAt'> {
@@ -27,6 +36,7 @@ function asTemplate(w: WorkoutDetail): Omit<Template, 'id' | 'lastUsedAt'> {
     // A workout made up only of stretches becomes a stretch routine.
     kind: w.exercises.length > 0 && w.exercises.every((e) => exerciseCategory(e.exercise) === 'stretching') ? 'stretch' : 'workout',
     folder: null,
+    programId: null,
     exercises: w.exercises.map((e) => ({
       exerciseId: e.exercise.id,
       restSeconds: null,
@@ -39,7 +49,9 @@ function asTemplate(w: WorkoutDetail): Omit<Template, 'id' | 'lastUsedAt'> {
 
 export default function WorkoutDetailScreen() {
   const db = useSQLiteContext();
-  const { id, summary } = useLocalSearchParams<{ id: string; summary?: string }>();
+  const { id, summary, next } = useLocalSearchParams<{ id: string; summary?: string; next?: string }>();
+  // What the program's progression rules set for next time (passed on when a workout is finished).
+  const nextTime = useMemo(() => (summary ? parseNextTime(next) : []), [summary, next]);
   const { settings } = useSettings();
   const active = useActiveWorkout();
   const [menu, setMenu] = useState(false);
@@ -106,6 +118,20 @@ export default function WorkoutDetailScreen() {
             </Text>
           </View>
         </View>
+      )}
+      {nextTime.length > 0 && (
+        <Card style={{ marginBottom: spacing.lg }}>
+          <Text style={styles.nextTitle}>Next time</Text>
+          {nextTime.map((n, i) => (
+            <View key={i} style={styles.nextRow}>
+              <Ionicons name={OUTCOME_ICON[n.outcome].name} size={18} color={OUTCOME_ICON[n.outcome].color} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.text}>{n.name}</Text>
+                <Text style={styles.nextText}>{n.text}</Text>
+              </View>
+            </View>
+          ))}
+        </Card>
       )}
       <Text style={styles.title}>{w.name}</Text>
       <Text style={styles.muted}>
@@ -214,6 +240,9 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.lg,
   },
+  nextTitle: { color: colors.text, fontWeight: '700', fontSize: 16, marginBottom: spacing.xs },
+  nextRow: { flexDirection: 'row', gap: spacing.sm, paddingVertical: 5 },
+  nextText: { color: colors.muted, fontSize: 13, marginTop: 1 },
   bannerTitle: { color: colors.text, fontWeight: '700', fontSize: 18 },
   bannerText: { color: colors.muted, marginTop: 2 },
   title: { color: colors.text, fontSize: 24, fontWeight: '700' },

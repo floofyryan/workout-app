@@ -11,6 +11,12 @@ in SQLite.
   **Workout templates** and **Stretch routines** (two starter stretch routines included); cards show
   their exercises and when they were last performed; duplicate, edit or delete them, group them into
   **folders** (e.g. "PPL", "Mobility") and drag them into any order.
+- **Programs** – workouts done in turn, with the next one ready to start on the Workout tab. Add one
+  from the library (5×5 Beginner, Upper / Lower, Push / Pull / Legs, Bodyweight Basics) or build your
+  own. Exercises carry a **progression rule** that moves their targets on by itself when you finish:
+  add weight (or a rep, or 5 s on holds) whenever every set hits its target, with a 10% deload after
+  three misses in a row; or work up a rep range (e.g. 8–12) and then add weight. The workout summary
+  shows what's set for next time.
 - **Live workout** – elapsed timer, editable name and notes, and per exercise a
   `SET | PREVIOUS | KG | REPS | ✓` grid:
   - "Previous" shows what you did last time; tap it to copy those values. Ticking a set with blank
@@ -91,12 +97,13 @@ src/app/            Expo Router screens (files are routes)
   active-workout    Live workout screen
   workout/[id]      Workout details / summary, workout-edit/[id] to edit
   template/[id]     Template editor ("new" to create)
+  program/[id]      Program (its workouts in rotation), programs = the program library
   exercise/[id]     Exercise About / History / Charts / Records
 src/components/     Shared UI (WorkoutEditor set grid, charts, sheets, inputs)
 src/db/             SQLite schema/migrations (schema.ts), queries (repo.ts), test database (testDb.ts)
 src/state/          Settings and active-workout React contexts
-src/lib/            Pure logic: calculations, formatting, units, CSV import/export
-src/data/           Built-in exercise library, starter templates, free-exercise-db copy and links
+src/lib/            Pure logic: calculations, progression rules, formatting, units, CSV import/export
+src/data/           Built-in exercise library, starter templates, programs, free-exercise-db copy and links
 scripts/            build-free-exercise-db.mjs refreshes src/data/freeExerciseDb.json
 ```
 

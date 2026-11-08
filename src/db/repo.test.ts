@@ -2,21 +2,26 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
+import { PROGRAMS } from '../data/programs';
 import { parseStrongCsv, workoutsToStrongCsv } from '../lib/strongCsv';
-import type { SetData } from '../lib/types';
+import type { SetData, Template } from '../lib/types';
+import { KG_PER_LB } from '../lib/units';
 import {
   addMeasurement,
+  deleteProgram,
   deleteTemplate,
   duplicateTemplate,
   exportBackup,
   exportWorkouts,
   findExerciseByName,
   getPreviousSets,
+  getProgram,
   getRecordsBefore,
   getSettings,
   getTemplate,
   getWorkout,
   importWorkouts,
+  installProgram,
   latestMeasurements,
   listExercises,
   listMeasurements,
@@ -379,6 +384,79 @@ describe('templates', () => {
     }));
 });
 
+describe('programs', () => {
+  test('every library program installs with all its exercises and a rule for each', () =>
+    withDb(async (db) => {
+      for (const def of PROGRAMS) {
+        const p = await getProgram(db, await installProgram(db, def, 'metric'));
+        if (!p) throw new Error(`${def.name} was not installed`);
+        assert.equal(p.name, def.name);
+        assert.deepEqual(
+          p.templates.map((t) => t.name),
+          def.workouts.map((w) => w.name),
+        );
+        for (const [i, w] of def.workouts.entries()) {
+          const t: Template = p.templates[i];
+          assert.equal(t.exercises.length, w.exercises.length, `${w.name}: every exercise is in the library`);
+          assert.ok(
+            t.exercises.every((e) => e.progression),
+            `${w.name}: every exercise has a progression rule`,
+          );
+          assert.equal(t.programId, p.id);
+        }
+      }
+    }));
+
+  test('the rotation moves on to the next workout once one is finished', () =>
+    withDb(async (db) => {
+      const bench = await exerciseId(db, 'Bench Press (Barbell)');
+      const id = await installProgram(db, PROGRAMS.find((p) => p.key === '5x5')!, 'metric');
+      const [a, b] = (await getProgram(db, id))!.templates;
+      const finish = (templateId: number, startedAt: number) =>
+        saveWorkout(db, null, {
+          name: 'Program day',
+          notes: '',
+          startedAt,
+          endedAt: startedAt + 1000,
+          templateId,
+          exercises: [{ exerciseId: bench.id, notes: '', sets: [set(60, 5)] }],
+        });
+
+      assert.equal((await getProgram(db, id))?.nextTemplateId, a.id, 'starts with the first workout');
+      await finish(a.id, 1_000);
+      assert.equal((await getProgram(db, id))?.nextTemplateId, b.id);
+      await finish(b.id, 2_000);
+      assert.equal((await getProgram(db, id))?.nextTemplateId, a.id, 'wraps around');
+    }));
+
+  test('rules use the unit system, and deleting a program keeps workouts done from it', () =>
+    withDb(async (db) => {
+      const bench = await exerciseId(db, 'Bench Press (Barbell)');
+      const id = await installProgram(db, PROGRAMS.find((p) => p.key === '5x5')!, 'imperial');
+      const [a, b] = (await getProgram(db, id))!.templates;
+      const step = (rule: unknown) => (rule as { increment: number }).increment;
+      assert.ok(Math.abs(step(a.exercises[0].progression) - 5 * KG_PER_LB) < 1e-9, 'squat: 5 lb');
+      assert.ok(Math.abs(step(b.exercises[2].progression) - 10 * KG_PER_LB) < 1e-9, 'deadlift: 10 lb');
+
+      const done = await saveWorkout(db, null, {
+        name: '5×5 A',
+        notes: '',
+        startedAt: 1_000,
+        endedAt: 2_000,
+        templateId: a.id,
+        exercises: [{ exerciseId: bench.id, notes: '', sets: [set(60, 5)] }],
+      });
+      await deleteProgram(db, id);
+      assert.equal(await getProgram(db, id), null);
+      assert.equal(await getTemplate(db, a.id), null, 'its workouts went with it');
+      const left = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM template_exercises WHERE template_id IN (?, ?)', a.id, b.id);
+      assert.equal(left?.n, 0);
+      const kept = await getWorkout(db, done);
+      assert.equal(kept?.name, '5×5 A', 'history is kept');
+      assert.equal(kept?.templateId, null);
+    }));
+});
+
 describe('settings, measurements and backups', () => {
   test('settings round trip and fill in defaults', () =>
     withDb(async (db) => {
@@ -419,6 +497,8 @@ describe('settings, measurements and backups', () => {
       await addMeasurement(db, 'bodyweight', 80, 1_000);
       const t = (await listTemplates(db))[0];
       await setTemplateFolder(db, t.id, 'Strength');
+      const programId = await installProgram(db, PROGRAMS[0], 'metric');
+      const program = await getProgram(db, programId);
       const backup = await exportBackup(db);
 
       await withDb(async (other) => {
@@ -440,6 +520,7 @@ describe('settings, measurements and backups', () => {
         assert.equal((await listExercises(other)).length, (await listExercises(db)).length);
         assert.equal((await getTemplate(other, t.id))?.folder, 'Strength');
         assert.equal((await latestMeasurements(other)).get('bodyweight')?.value, 80);
+        assert.deepEqual(await getProgram(other, programId), program, 'programs and their rules come back');
       });
     }));
 

@@ -12,6 +12,8 @@ import {
   insertSetsAtStart,
   moveExerciseIn,
   newActiveSet,
+  progressedTemplate,
+  progressWorkout,
   removeSetFrom,
   replaceExerciseIn,
   templateChanges,
@@ -29,6 +31,7 @@ const template: Template = {
   notes: '',
   kind: 'workout',
   folder: null,
+  programId: null,
   lastUsedAt: null,
   exercises: [
     {
@@ -116,6 +119,57 @@ describe('active workout editing', () => {
         [105, 5],
       ],
     );
+  });
+
+  it('progression rules carry through a workout and move the template on', () => {
+    const rule = { kind: 'linear' as const, increment: 2.5, deloadAfter: 3, deloadPercent: 10, misses: 0 };
+    const program: Template = {
+      ...template,
+      exercises: [
+        { ...template.exercises[0], progression: rule },
+        {
+          exerciseId: 20,
+          restSeconds: null,
+          notes: '',
+          sets: [{ setType: 'normal', weight: 50, reps: 8, durationS: null, distanceM: null, rpe: null }],
+        },
+      ],
+    };
+    let w = workoutFromTemplate(program, 0);
+    assert.deepEqual(w.exercises[0].progression, rule);
+    assert.equal(w.exercises[0].targets?.length, 2, 'targets are kept to judge the rule against');
+    assert.equal(w.exercises[1].progression, null);
+
+    // Do the ruled exercise as planned, the other one heavier; then move the ruled one last.
+    const [squat, row] = w.exercises;
+    for (const set of squat.sets) w = updateSetIn(w, squat.key, set.key, { completed: true });
+    w = updateSetIn(w, row.key, row.sets[0].key, { weight: 55, completed: true });
+    w = moveExerciseIn(w, squat.key, 1);
+    assert.equal(templateChanges(w, program), 'exercises', 'order changed');
+
+    const types = () => 'weight_reps' as const;
+    const results = progressWorkout(w, types);
+    assert.deepEqual([...results.keys()], [squat.key], 'only exercises with a rule progress');
+    // Keeping the template's layout: the ruled exercise moves on, the other one stays as it was.
+    const kept = progressedTemplate(program, w, results);
+    assert.deepEqual(kept[0].sets.map((s) => s.weight), [102.5, 102.5]);
+    assert.equal(kept[1].sets[0].weight, 50);
+    // Updating the template to match the workout: same, but in the new order with today's numbers.
+    const updated = templateExercisesFromWorkout(w, results);
+    assert.deepEqual(updated.map((e) => e.exerciseId), [20, 10]);
+    assert.equal(updated[0].sets[0].weight, 55);
+    assert.deepEqual(updated[1].sets.map((s) => s.weight), [102.5, 102.5]);
+    assert.deepEqual(updated[1].progression, rule);
+
+    // A ruled exercise's numbers alone don't make the template "changed": the rule handles them.
+    const same = workoutFromTemplate(program, 0);
+    const ex = same.exercises[0];
+    const heavier = updateSetIn(same, ex.key, ex.sets[0].key, { weight: 110, completed: true });
+    assert.equal(templateChanges(heavier, program), null);
+    // Swapping the exercise out drops its rule.
+    const swapped = replaceExerciseIn(same, ex.key, 30);
+    assert.equal(swapped.exercises[0].progression, null);
+    assert.equal(swapped.exercises[0].targets, null);
   });
 
   it('reorders exercises', () => {

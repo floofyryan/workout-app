@@ -119,6 +119,18 @@ export interface SetData {
   rpe: number | null;
 }
 
+/**
+ * How a template exercise's targets move on after each session.
+ * - linear: when every set hits its target, add `increment` next time (kg for weighted exercises,
+ *   reps for reps-only ones, seconds for timed holds); after `deloadAfter` misses in a row, take
+ *   `deloadPercent` off. `misses` counts the misses so far.
+ * - double: stay at a weight and add reps from `minReps` up to `maxReps`; once every set reaches
+ *   `maxReps`, add `increment` kg and start again from `minReps`.
+ */
+export type Progression =
+  | { kind: 'linear'; increment: number; deloadAfter: number; deloadPercent: number; misses?: number }
+  | { kind: 'double'; minReps: number; maxReps: number; increment: number };
+
 export interface TemplateExercise {
   exerciseId: number;
   restSeconds: number | null;
@@ -126,6 +138,7 @@ export interface TemplateExercise {
   sets: SetData[];
   /** Exercises with the same number (next to each other) form a superset. */
   supersetGroup?: number | null;
+  progression?: Progression | null;
 }
 
 export const TEMPLATE_KINDS = ['workout', 'stretch'] as const;
@@ -139,8 +152,21 @@ export interface Template {
   kind: TemplateKind;
   /** Optional folder name for grouping templates on the Workout tab. */
   folder: string | null;
+  /** The program this template is a workout of (programs are listed separately). */
+  programId: number | null;
   lastUsedAt: number | null;
   exercises: TemplateExercise[];
+}
+
+/** Workouts done in rotation (A, B, A, …), usually with progression rules. */
+export interface Program {
+  id: number;
+  name: string;
+  notes: string;
+  /** Its workouts, in rotation order. */
+  templates: Template[];
+  /** The workout due next: the one after the last one finished, or the first. */
+  nextTemplateId: number | null;
 }
 
 export interface WorkoutSummary {

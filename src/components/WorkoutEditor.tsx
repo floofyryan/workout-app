@@ -22,6 +22,7 @@ import {
 import { usesWeight, warmupSets } from '@/lib/calc';
 import { formatClock } from '@/lib/format';
 import { setPickerHandler } from '@/lib/picker';
+import { describeProgression, progressionKinds } from '@/lib/progression';
 import { formatSet } from '@/lib/setFormat';
 import { colors, radius, spacing } from '@/lib/theme';
 import type { Exercise, SetData, SetType } from '@/lib/types';
@@ -36,6 +37,7 @@ import {
 } from '@/lib/units';
 import { useSettings } from '@/state/SettingsContext';
 import { DurationInput, NumberInput } from './NumberInput';
+import { ProgressionSheet } from './ProgressionSheet';
 import { ActionSheet, PromptModal, type SheetAction } from './Sheets';
 import { ReorderSheet, SwipeToDelete } from './Sortable';
 import { Button } from './ui';
@@ -95,6 +97,8 @@ export function WorkoutEditor({
     onSubmit: (v: string) => void;
   } | null>(null);
   const [reordering, setReordering] = useState(false);
+  // Exercise whose progression rule is being edited (template editor).
+  const [ruleFor, setRuleFor] = useState<ActiveExercise | null>(null);
   const colorsBySuperset = supersetColors(workout.exercises);
 
   const addExercises = () => {
@@ -133,6 +137,13 @@ export function WorkoutEditor({
               );
             },
           }),
+      });
+    }
+    if (mode === 'template' && ex && progressionKinds(ex.type).length > 0) {
+      actions.push({
+        label: item.progression ? 'Edit progression' : 'Add progression',
+        icon: 'trending-up-outline',
+        onPress: () => setRuleFor(item),
       });
     }
     if (ex && usesWeight(ex.type) && ex.type !== 'assisted_bodyweight') {
@@ -281,6 +292,15 @@ export function WorkoutEditor({
         onSubmit={(v) => prompt?.onSubmit(v)}
         onClose={() => setPrompt(null)}
       />
+      <ProgressionSheet
+        visible={!!ruleFor}
+        exerciseName={(ruleFor && exercises.get(ruleFor.exerciseId)?.name) ?? ''}
+        type={(ruleFor && exercises.get(ruleFor.exerciseId)?.type) ?? 'weight_reps'}
+        value={ruleFor?.progression ?? null}
+        units={settings.units}
+        onSave={(progression) => ruleFor && onChange((w) => updateExerciseIn(w, ruleFor.key, { progression }))}
+        onClose={() => setRuleFor(null)}
+      />
     </>
   );
 }
@@ -383,6 +403,12 @@ function ExerciseBlock({
       ) : null}
       {mode !== 'edit' && item.restSeconds != null ? (
         <Text style={styles.restLabel}>Rest: {formatClock(item.restSeconds)}</Text>
+      ) : null}
+      {mode !== 'edit' && item.progression && exercise ? (
+        <View style={styles.ruleRow}>
+          <Ionicons name="trending-up" size={13} color={colors.success} />
+          <Text style={styles.ruleText}>{describeProgression(item.progression, type, units)}</Text>
+        </View>
       ) : null}
 
       <View style={[styles.row, styles.headerRow]}>
@@ -536,6 +562,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   restLabel: { color: colors.muted, fontSize: 12, marginBottom: spacing.xs },
+  ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: spacing.xs },
+  ruleText: { color: colors.success, fontSize: 12, flexShrink: 1 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   headerRow: { paddingVertical: 4 },
   headerText: { color: colors.muted, fontSize: 12, fontWeight: '700', textAlign: 'center' },

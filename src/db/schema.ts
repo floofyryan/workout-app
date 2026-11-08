@@ -165,6 +165,21 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
       ALTER TABLE templates ADD COLUMN folder TEXT;
     `);
   },
+  // v6: programs (templates done in rotation) and per-exercise progression rules (JSON).
+  async (db) => {
+    await db.execAsync(`
+      CREATE TABLE programs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        notes TEXT NOT NULL DEFAULT '',
+        position INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+      );
+      ALTER TABLE templates ADD COLUMN program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE;
+      CREATE INDEX idx_templates_program ON templates(program_id);
+      ALTER TABLE template_exercises ADD COLUMN progression TEXT;
+    `);
+  },
 ];
 
 async function importFreeExerciseDb(db: SQLiteDatabase) {

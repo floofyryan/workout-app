@@ -8,12 +8,15 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { ActionSheet, PromptModal } from '@/components/Sheets';
 import { ReorderSheet } from '@/components/Sortable';
 import { Button, Card, SectionTitle } from '@/components/ui';
-import { deleteTemplate, duplicateTemplate, listTemplates, reorderTemplates, setTemplateFolder } from '@/db/repo';
+import { deleteTemplate, duplicateTemplate, listPrograms, listTemplates, reorderTemplates, setTemplateFolder } from '@/db/repo';
 import { formatClock } from '@/lib/format';
 import { useExerciseMap, useFocusQuery } from '@/lib/hooks';
+import { summarizeTargets } from '@/lib/progression';
 import { colors, spacing } from '@/lib/theme';
-import type { Exercise, Template, TemplateKind } from '@/lib/types';
+import type { Exercise, Program, Template, TemplateKind, UnitSystem } from '@/lib/types';
 import { useActiveWorkout } from '@/state/ActiveWorkoutContext';
+import { useSettings } from '@/state/SettingsContext';
+import { useBeginWorkout } from '@/state/useBeginWorkout';
 
 function daysAgo(ts: number | null): string {
   if (!ts) return 'Never performed';
@@ -25,8 +28,16 @@ function daysAgo(ts: number | null): string {
 
 export default function StartWorkoutScreen() {
   const db = useSQLiteContext();
-  const { workout, start } = useActiveWorkout();
-  const [templates, reload] = useFocusQuery(listTemplates);
+  const { workout } = useActiveWorkout();
+  const { settings } = useSettings();
+  const begin = useBeginWorkout();
+  const [data, reload] = useFocusQuery(async (db) => ({
+    templates: await listTemplates(db),
+    programs: await listPrograms(db),
+  }));
+  // Program workouts are shown with their program, not as loose templates.
+  const templates = data?.templates.filter((t) => t.programId == null);
+  const programs = data?.programs;
   const [selected, setSelected] = useState<Template | null>(null);
   const [folderFor, setFolderFor] = useState<Template | null>(null);
   const [reorderKind, setReorderKind] = useState<TemplateKind | null>(null);
@@ -36,25 +47,30 @@ export default function StartWorkoutScreen() {
     await reorderTemplates(db, [...keys.map(Number), ...others]);
     reload();
   };
-  const exercises = useExerciseMap((templates ?? []).flatMap((t) => t.exercises.map((e) => e.exerciseId)));
-
-  const begin = (template?: Template) => {
-    const go = () => {
-      start(template);
-      router.push('/active-workout');
-    };
-    if (!workout) return go();
-    Alert.alert('Workout in progress', 'You already have a workout in progress.', [
-      { text: 'Resume', onPress: () => router.push('/active-workout') },
-      { text: 'Discard & start new', style: 'destructive', onPress: go },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
+  const exercises = useExerciseMap(
+    [...(templates ?? []), ...(programs ?? []).flatMap((p) => p.templates)].flatMap((t) =>
+      t.exercises.map((e) => e.exerciseId),
+    ),
+  );
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.container}>
       <SectionTitle>Quick start</SectionTitle>
       <Button title={workout ? 'Resume Workout' : 'Start an Empty Workout'} onPress={() => (workout ? router.push('/active-workout') : begin())} />
+
+      <SectionTitle
+        right={<Button title="Program" icon="add" small variant="ghost" onPress={() => router.push('/programs')} />}
+      >
+        Programs ({programs?.length ?? 0})
+      </SectionTitle>
+      {programs?.map((p) => (
+        <ProgramCard key={p.id} program={p} exercises={exercises} units={settings.units} onStart={begin} />
+      ))}
+      {programs && programs.length === 0 && (
+        <Text style={{ color: colors.muted }}>
+          No programs yet. Add one and the weights go up on their own as you hit your targets.
+        </Text>
+      )}
 
       <TemplateSection
         kind="workout"
@@ -148,6 +164,53 @@ export default function StartWorkoutScreen() {
   );
 }
 
+/** A program with its next workout ready to start; tapping it opens the program. */
+function ProgramCard({
+  program,
+  exercises,
+  units,
+  onStart,
+}: {
+  program: Program;
+  exercises: Map<number, Exercise>;
+  units: UnitSystem;
+  onStart: (t: Template) => void;
+}) {
+  const next = program.templates.find((t) => t.id === program.nextTemplateId);
+  return (
+    <Card
+      style={styles.programCard}
+      onPress={() => router.push({ pathname: '/program/[id]', params: { id: String(program.id) } })}
+    >
+      <View style={styles.programHeader}>
+        <Text style={[styles.templateName, { flex: 1, marginBottom: 0 }]} numberOfLines={1}>
+          {program.name}
+        </Text>
+        <Ionicons name="chevron-forward" size={18} color={colors.faint} />
+      </View>
+      {next ? (
+        <>
+          <Text style={styles.upNext}>Up next: {next.name}</Text>
+          {next.exercises.map((e, i) => {
+            const ex = exercises.get(e.exerciseId);
+            return (
+              <View key={i} style={styles.programLine}>
+                <Text style={[styles.templateLine, { flex: 1 }]} numberOfLines={1}>
+                  {ex?.name ?? '…'}
+                </Text>
+                <Text style={styles.templateLine}>{ex ? summarizeTargets(e.sets, ex.type, units) : ''}</Text>
+              </View>
+            );
+          })}
+          <Button title={`Start ${next.name}`} icon="play" small onPress={() => onStart(next)} style={styles.programStart} />
+        </>
+      ) : (
+        <Text style={styles.templateLine}>No workouts yet. Open the program to add one.</Text>
+      )}
+    </Card>
+  );
+}
+
 /** One group of template cards (workouts or stretch routines) with its own "+" button. */
 function TemplateSection({
   kind,
@@ -238,4 +301,9 @@ const styles = StyleSheet.create({
   templateName: { color: colors.text, fontWeight: '700', fontSize: 16, marginBottom: spacing.xs },
   templateLine: { color: colors.muted, fontSize: 12, marginTop: 2 },
   lastUsed: { color: colors.faint, fontSize: 11, marginTop: 'auto', paddingTop: spacing.sm },
+  programCard: { marginBottom: spacing.md, padding: spacing.md, borderColor: 'rgba(59,130,246,0.35)' },
+  programHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs },
+  upNext: { color: colors.primary, fontSize: 13, fontWeight: '700', marginBottom: 2 },
+  programLine: { flexDirection: 'row', gap: spacing.sm },
+  programStart: { marginTop: spacing.md, alignSelf: 'flex-start' },
 });

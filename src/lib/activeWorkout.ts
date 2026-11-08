@@ -1,4 +1,5 @@
-import type { SetData, Template, TemplateExercise } from './types';
+import { progress, type ProgressionResult } from './progression';
+import type { ExerciseType, Progression, SetData, Template, TemplateExercise } from './types';
 
 export interface ActiveSet extends SetData {
   key: string;
@@ -13,6 +14,10 @@ export interface ActiveExercise {
   sets: ActiveSet[];
   /** Consecutive exercises sharing an id are done as a superset (no rest between them). */
   supersetId?: string | null;
+  /** Progression rule from the template, if it has one. */
+  progression?: Progression | null;
+  /** The template's targets when the workout started, which the rule is judged against. */
+  targets?: SetData[] | null;
 }
 
 export interface ActiveWorkout {
@@ -83,6 +88,8 @@ export function workoutFromTemplate(template: Template, startedAt: number): Acti
       restSeconds: te.restSeconds,
       sets: (te.sets.length ? te.sets : [emptySet()]).map((s) => newActiveSet(s)),
       supersetId: supersetIds[i],
+      progression: te.progression ?? null,
+      targets: te.progression ? te.sets : null,
     })),
   };
 }
@@ -143,23 +150,72 @@ export function stripActive(s: ActiveSet): SetData {
   };
 }
 
-/** Template contents reflecting what was actually done in a workout. */
-export function templateExercisesFromWorkout(w: ActiveWorkout): TemplateExercise[] {
+/**
+ * Template contents reflecting what was actually done in a workout. Exercises with a progression
+ * result get next time's targets instead of today's numbers.
+ */
+export function templateExercisesFromWorkout(
+  w: ActiveWorkout,
+  results?: Map<string, ProgressionResult>,
+): TemplateExercise[] {
   const kept = w.exercises.filter((e) => e.sets.length > 0);
   const groups = supersetGroupsFromIds(kept.map((e) => e.supersetId));
-  return kept.map((e, i) => ({
-    exerciseId: e.exerciseId,
-    restSeconds: e.restSeconds,
-    notes: e.notes,
-    sets: e.sets.map(stripActive),
-    supersetGroup: groups[i],
-  }));
+  return kept.map((e, i) => {
+    const r = results?.get(e.key);
+    return {
+      exerciseId: e.exerciseId,
+      restSeconds: e.restSeconds,
+      notes: e.notes,
+      sets: r ? r.sets : e.sets.map(stripActive),
+      supersetGroup: groups[i],
+      progression: r ? r.progression : (e.progression ?? null),
+    };
+  });
+}
+
+/**
+ * Applies a session's progression rules: next time's targets for each exercise that has a rule and
+ * was done, keyed by exercise key. Types come from the exercise library.
+ */
+export function progressWorkout(
+  w: ActiveWorkout,
+  typeOf: (exerciseId: number) => ExerciseType | undefined,
+): Map<string, ProgressionResult> {
+  const results = new Map<string, ProgressionResult>();
+  for (const e of w.exercises) {
+    const type = typeOf(e.exerciseId);
+    if (!e.progression || !e.targets || !type) continue;
+    const done = e.sets.filter((s) => s.completed && hasValues(s)).map(stripActive);
+    const r = progress(e.progression, type, e.targets, done);
+    if (r) results.set(e.key, r);
+  }
+  return results;
+}
+
+/**
+ * The template as it was, with the exercises that progressed moved on to next time's targets.
+ * Workout exercises are matched to the template's by exercise, in order, so this also works when
+ * exercises were reordered, added or removed during the workout.
+ */
+export function progressedTemplate(
+  t: Template,
+  w: ActiveWorkout,
+  results: Map<string, ProgressionResult>,
+): TemplateExercise[] {
+  const pending = w.exercises.filter((e) => results.has(e.key));
+  return t.exercises.map((te) => {
+    const i = pending.findIndex((e) => e.exerciseId === te.exerciseId);
+    if (i < 0) return te;
+    const r = results.get(pending.splice(i, 1)[0].key)!;
+    return { ...te, sets: r.sets, progression: r.progression };
+  });
 }
 
 /**
  * How a workout differs from the template it started from: 'exercises' when exercises or set counts
  * changed, 'values' when only the numbers of completed sets (weight, reps, time, distance, set type)
- * changed, or null when it matches.
+ * changed, or null when it matches. Exercises with a progression rule update themselves, so their
+ * numbers don't count as a change.
  */
 export function templateChanges(w: ActiveWorkout, t: Template): 'exercises' | 'values' | null {
   if (w.exercises.length !== t.exercises.length) return 'exercises';
@@ -170,7 +226,7 @@ export function templateChanges(w: ActiveWorkout, t: Template): 'exercises' | 'v
   if (structure) return 'exercises';
   const values = w.exercises.some((e, i) =>
     e.sets.some((s, j) => {
-      if (!s.completed) return false;
+      if (!s.completed || e.progression) return false;
       const ts = t.exercises[i].sets[j];
       return (
         s.setType !== ts.setType ||
@@ -205,6 +261,9 @@ export function replaceExerciseIn(w: ActiveWorkout, key: string, exerciseId: num
     ...e,
     exerciseId,
     sets: e.sets.map((s) => ({ ...emptySet(), setType: s.setType, key: s.key, completed: false })),
+    // The rule and its targets belonged to the exercise that was swapped out.
+    progression: null,
+    targets: null,
   }));
 }
 
