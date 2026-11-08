@@ -356,8 +356,8 @@ async function writeTemplateExercises(db: SQLiteDatabase, templateId: number, ex
   }
 }
 
-/** Inserts a template (callers provide the transaction). */
-async function insertTemplate(db: SQLiteDatabase, t: TemplateInput): Promise<number> {
+/** Inserts a template. Doesn't open a transaction, so callers can group several inserts in one. */
+export async function insertTemplate(db: SQLiteDatabase, t: TemplateInput): Promise<number> {
   const pos = await db.getFirstAsync<{ p: number | null }>('SELECT MAX(position) AS p FROM templates');
   const res = await db.runAsync(
     'INSERT INTO templates (name, notes, kind, folder, program_id, position, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',

@@ -5,8 +5,11 @@ import * as Sharing from 'expo-sharing';
 /** Lets the user pick a file and returns its text, or null if cancelled. */
 export async function pickTextFile(types: string[]): Promise<string | null> {
   const res = await DocumentPicker.getDocumentAsync({ type: types, copyToCacheDirectory: true });
-  if (res.canceled || !res.assets?.[0]) return null;
-  return new File(res.assets[0].uri).text();
+  const asset = res.canceled ? undefined : res.assets?.[0];
+  if (!asset) return null;
+  // On web the picker hands over the browser's own file (expo-file-system can't read files there).
+  if (asset.file) return asset.file.text();
+  return new File(asset.uri).text();
 }
 
 /** Writes text to a temp file and opens the share sheet (save to Drive, email, etc.). */

@@ -1,12 +1,13 @@
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { PromptModal } from '@/components/Sheets';
 import { Button, Card } from '@/components/ui';
 import { PROGRAMS, type ProgramDef } from '@/data/programs';
 import { createProgram, installProgram } from '@/db/repo';
+import { describeImport, errorText, pickAndImportShared } from '@/lib/sharing';
 import { colors, spacing } from '@/lib/theme';
 import { useSettings } from '@/state/SettingsContext';
 
@@ -22,6 +23,21 @@ export default function ProgramLibraryScreen() {
     setBusy(def.key);
     try {
       open(await installProgram(db, def, settings.units));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const importFile = async () => {
+    setBusy('import');
+    try {
+      const result = await pickAndImportShared(db);
+      if (!result) return;
+      if (result.programId != null) return open(result.programId);
+      // A single template goes with the other templates on the Workout tab.
+      Alert.alert('Imported', describeImport(result));
+      router.back();
+    } catch (e) {
+      Alert.alert('Could not import', errorText(e));
     } finally {
       setBusy(null);
     }
@@ -56,6 +72,15 @@ export default function ProgramLibraryScreen() {
         </Card>
       ))}
       <Button title="Start from scratch" icon="create-outline" variant="secondary" onPress={() => setNaming(true)} />
+      <Button
+        title="Import a shared program"
+        icon="document-attach-outline"
+        variant="secondary"
+        loading={busy === 'import'}
+        disabled={busy != null}
+        onPress={importFile}
+        style={{ marginTop: spacing.md }}
+      />
       <PromptModal
         visible={naming}
         title="Program name"

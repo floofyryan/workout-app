@@ -1,7 +1,7 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import Ionicons from '@expo/vector-icons/Ionicons';
 
@@ -12,6 +12,7 @@ import { deleteProgram, deleteTemplate, duplicateTemplate, getProgram, renamePro
 import { confirmAsync } from '@/lib/dialog';
 import { useExerciseMap, useFocusQuery } from '@/lib/hooks';
 import { describeProgression, summarizeTargets } from '@/lib/progression';
+import { errorText, shareProgram } from '@/lib/sharing';
 import { colors, radius, spacing } from '@/lib/theme';
 import type { Template } from '@/lib/types';
 import { useSettings } from '@/state/SettingsContext';
@@ -144,6 +145,12 @@ export default function ProgramScreen() {
         onClose={() => setMenu(false)}
         actions={[
           { label: 'Rename', icon: 'pencil-outline', onPress: () => setRenaming(true) },
+          {
+            label: 'Share program',
+            icon: 'share-outline',
+            onPress: () =>
+              shareProgram(db, program.id, program.name).catch((e) => Alert.alert('Could not share', errorText(e))),
+          },
           ...(program.templates.length > 1
             ? [{ label: 'Reorder workouts', icon: 'reorder-three-outline' as const, onPress: () => setReordering(true) }]
             : []),

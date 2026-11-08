@@ -12,6 +12,7 @@ import { deleteTemplate, duplicateTemplate, listPrograms, listTemplates, reorder
 import { formatClock } from '@/lib/format';
 import { useExerciseMap, useFocusQuery } from '@/lib/hooks';
 import { summarizeTargets } from '@/lib/progression';
+import { errorText, shareTemplate } from '@/lib/sharing';
 import { colors, spacing } from '@/lib/theme';
 import type { Exercise, Program, Template, TemplateKind, UnitSystem } from '@/lib/types';
 import { useActiveWorkout } from '@/state/ActiveWorkoutContext';
@@ -131,6 +132,12 @@ export default function StartWorkoutScreen() {
                   onPress: () => router.push({ pathname: '/template/[id]', params: { id: String(selected.id) } }),
                 },
                 { label: 'Move to folder', icon: 'folder-outline', onPress: () => setFolderFor(selected) },
+                {
+                  label: 'Share',
+                  icon: 'share-outline',
+                  onPress: () =>
+                    shareTemplate(db, selected.id, selected.name).catch((e) => Alert.alert('Could not share', errorText(e))),
+                },
                 {
                   label: 'Duplicate',
                   icon: 'copy-outline',

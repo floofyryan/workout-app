@@ -9,6 +9,7 @@ import { deleteAllWorkouts, exportBackup, exportWorkouts, importWorkouts, restor
 import { dateStamp, pickTextFile, shareTextFile } from '@/lib/files';
 import { formatClock, parseNumber } from '@/lib/format';
 import { activeGym } from '@/lib/gyms';
+import { describeImport, pickAndImportShared } from '@/lib/sharing';
 import { parseStrongCsv, workoutsToStrongCsv } from '@/lib/strongCsv';
 import { colors, radius, spacing } from '@/lib/theme';
 import type { UnitSystem } from '@/lib/types';
@@ -77,6 +78,12 @@ export default function SettingsScreen() {
           (res.workoutsSkipped ? `\nSkipped ${res.workoutsSkipped} already imported.` : '') +
           (res.exercisesCreated ? `\nCreated ${res.exercisesCreated} new exercises.` : ''),
       );
+    });
+
+  const importSharedFile = () =>
+    run('shared', async () => {
+      const result = await pickAndImportShared(db);
+      if (result) Alert.alert('Imported', describeImport(result));
     });
 
   const exportCsv = () =>
@@ -192,6 +199,14 @@ export default function SettingsScreen() {
       <Text style={styles.hint}>
         In Strong: Settings → Export Strong Data. Then pick the CSV file here. Already imported workouts are skipped.
       </Text>
+      <Button
+        title="Import a shared template or program"
+        icon="document-attach-outline"
+        variant="secondary"
+        onPress={importSharedFile}
+        loading={busy === 'shared'}
+        style={styles.gap}
+      />
       <Button title="Export workouts (CSV)" icon="share-outline" variant="secondary" onPress={exportCsv} loading={busy === 'csv'} style={styles.gap} />
       <Button title="Back up all data (JSON)" icon="cloud-upload-outline" variant="secondary" onPress={backup} loading={busy === 'backup'} style={styles.gap} />
       <Button title="Restore from backup" icon="cloud-download-outline" variant="secondary" onPress={restore} loading={busy === 'restore'} style={styles.gap} />

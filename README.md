@@ -62,7 +62,9 @@ in SQLite.
 - **Units** – metric or imperial.
 - **Import / export** – import your history from a **Strong CSV export** (Strong → Settings →
   Export Strong Data); exercises are matched by name and unknown ones are created. Export
-  everything as a Strong-compatible CSV, or back up / restore all data as JSON.
+  everything as a Strong-compatible CSV, or back up / restore all data as JSON. **Share** a
+  template or a whole program as a file (with its progression rules, without your weights) and
+  import ones others send you (Settings, or the program library).
 
 ## Running it
 
