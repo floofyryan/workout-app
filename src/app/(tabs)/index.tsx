@@ -58,6 +58,13 @@ export default function StartWorkoutScreen() {
     <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.container}>
       <SectionTitle>Quick start</SectionTitle>
       <Button title={workout ? 'Resume Workout' : 'Start an Empty Workout'} onPress={() => (workout ? router.push('/active-workout') : begin())} />
+      <Button
+        title="Suggest a Workout"
+        icon="sparkles-outline"
+        variant="secondary"
+        onPress={() => router.push('/generate')}
+        style={{ marginTop: spacing.sm }}
+      />
 
       <SectionTitle
         right={<Button title="Program" icon="add" small variant="ghost" onPress={() => router.push('/programs')} />}

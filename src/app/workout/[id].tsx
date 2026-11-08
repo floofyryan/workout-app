@@ -89,9 +89,8 @@ export default function WorkoutDetailScreen() {
 
   const repeat = () => {
     const go = () => {
+      // An unsaved plan (id -1): the repeated workout isn't tied to a template.
       active.start({ ...asTemplate(w), id: -1, lastUsedAt: null });
-      // A repeated workout isn't tied to a template.
-      active.update((cur) => ({ ...cur, templateId: null }));
       router.push('/active-workout');
     };
     if (active.workout) {

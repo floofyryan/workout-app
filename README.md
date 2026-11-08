@@ -52,6 +52,11 @@ in SQLite.
   (est. 1RM, heaviest weight, volume, reps, duration, distance) and **Records** (PRs plus a 1–12
   rep-max table). Bodyweight exercises are tracked as reps only; "(Weighted)" and "(Assisted)"
   variants track the added or assisting weight.
+- **Suggested workouts** – a recovery map shades the muscles you worked hard in the last few days
+  (red) and those still recovering (amber), estimated from your sets; **Suggest a Workout** (Workout
+  tab) then builds a session for the freshest split (or the one you pick: push, pull, legs, upper,
+  lower, full body) from exercises your gym has, favouring the ones you already do. Shuffle for
+  another take, then start it.
 - **Gyms** – save the equipment at each place you train (home, work…) and pick where you are:
   exercise lists then show only what you can do there (one tap shows everything again), and
   **Replace exercise** suggests stand-ins that work the same muscles with the kit you have.

@@ -52,6 +52,11 @@ const MUSCLE_MAP: Record<string, BodyPart> = {
   triceps: 'Triceps',
 };
 
+/** The body part a free-exercise-db muscle name belongs to (e.g. "lats" → Back). */
+export function muscleBodyPart(muscle: string): BodyPart | undefined {
+  return MUSCLE_MAP[muscle];
+}
+
 export function toEquipment(e: FreeExercise): Equipment {
   if (e.category === 'cardio') return 'Cardio';
   // Entries without equipment are bodyweight movements or stretches.

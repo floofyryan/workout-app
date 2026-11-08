@@ -49,36 +49,46 @@ const FIGURES = [
 
 /**
  * Anatomical front and back figures; tapping a muscle selects its body part (tapping it again
- * clears the selection). The goblin is our own (src/data/goblinBody.ts); the male and
+ * clears the selection). Without `onSelect` it only shows things, e.g. `shading` colours per body
+ * part for the recovery map. The goblin is our own (src/data/goblinBody.ts); the male and
  * female figures come from react-native-body-highlighter (MIT).
  */
 export function BodyMap({
-  selected,
+  selected = null,
   onSelect,
   counts,
+  shading,
+  caption: captionText,
 }: {
-  selected: BodyPart | null;
-  onSelect: (part: BodyPart | null) => void;
+  selected?: BodyPart | null;
+  onSelect?: (part: BodyPart | null) => void;
   /** Number of exercises per body part, shown in the caption. */
   counts?: Map<BodyPart, number>;
+  /** A colour for each body part to shade. */
+  shading?: Map<BodyPart, string>;
+  caption?: string;
 }) {
   const { settings, updateSettings } = useSettings();
   const [width, setWidth] = useState(0);
-  const toggle = (part: BodyPart) => onSelect(selected === part ? null : part);
+  const toggle = (part: BodyPart) => onSelect?.(selected === part ? null : part);
 
   const scale = width > 0 ? Math.min(0.9, (width - GAP) / 2 / FIGURE_WIDTH) : 0;
-  const highlighted: ExtendedBodyPart[] = (selected ? (PART_SLUGS.get(selected) ?? []) : []).map((slug) => ({
-    slug,
-    intensity: 1,
-  }));
-  const onPressSlug = (slug: Slug | undefined) => {
-    const mapped = slug ? SLUG_TO_PART[slug] : undefined;
-    if (mapped) toggle(mapped);
-  };
+  const selectedSlugs = selected ? (PART_SLUGS.get(selected) ?? []) : [];
+  const shaded = [...(shading ?? [])].flatMap(([part, color]) => (PART_SLUGS.get(part) ?? []).map((slug) => ({ slug, color })));
+  const data: ExtendedBodyPart[] = [
+    ...shaded.filter((s) => !selectedSlugs.includes(s.slug)),
+    ...selectedSlugs.map((slug) => ({ slug, color: colors.primary })),
+  ];
+  const onPressSlug = onSelect
+    ? (slug: Slug | undefined) => {
+        const mapped = slug ? SLUG_TO_PART[slug] : undefined;
+        if (mapped) toggle(mapped);
+      }
+    : undefined;
   const figureKind = settings.bodyMapFigure === 'male' || settings.bodyMapFigure === 'female' ? settings.bodyMapFigure : 'goblin';
-  const caption = selected
-    ? `${selected}${counts ? ` · ${counts.get(selected) ?? 0} exercises` : ''}`
-    : 'Tap a muscle';
+  const caption =
+    captionText ??
+    (selected ? `${selected}${counts ? ` · ${counts.get(selected) ?? 0} exercises` : ''}` : onSelect ? 'Tap a muscle' : '');
 
   const figure = (side: 'front' | 'back') => (
     <View style={styles.figure}>
@@ -86,19 +96,19 @@ export function BodyMap({
         <GoblinBody
           side={side}
           scale={scale}
-          highlighted={new Set(highlighted.map((h) => h.slug as string))}
+          highlighted={new Set<string>(selectedSlugs)}
+          fills={new Map<string, string>(shaded.map((s) => [s.slug, s.color]))}
           onPress={onPressSlug}
         />
       ) : (
         <Body
-          data={highlighted}
+          data={data}
           side={side}
           gender={figureKind}
           scale={scale}
-          colors={[colors.primary]}
           defaultFill="#3B414E"
           border={colors.faint}
-          onBodyPartPress={(part) => onPressSlug(part.slug)}
+          onBodyPartPress={onPressSlug ? (part) => onPressSlug(part.slug) : undefined}
         />
       )}
       <Text style={styles.sideLabel}>{side === 'front' ? 'FRONT' : 'BACK'}</Text>
@@ -115,12 +125,14 @@ export function BodyMap({
           </>
         )}
       </View>
-      <Text style={[styles.caption, selected && { color: colors.text }]}>{caption}</Text>
-      <View style={styles.extras}>
-        {EXTRA_PARTS.filter((part) => part !== 'Other' || (counts?.get('Other') ?? 0) > 0).map((part) => (
-          <Chip key={part} label={part} selected={selected === part} onPress={() => toggle(part)} />
-        ))}
-      </View>
+      {caption ? <Text style={[styles.caption, selected && { color: colors.text }]}>{caption}</Text> : null}
+      {onSelect ? (
+        <View style={styles.extras}>
+          {EXTRA_PARTS.filter((part) => part !== 'Other' || (counts?.get('Other') ?? 0) > 0).map((part) => (
+            <Chip key={part} label={part} selected={selected === part} onPress={() => toggle(part)} />
+          ))}
+        </View>
+      ) : null}
       <View style={styles.gender}>
         {FIGURES.map((f) => (
           <Chip

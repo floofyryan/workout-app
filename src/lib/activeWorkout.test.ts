@@ -50,6 +50,7 @@ describe('active workout editing', () => {
   it('starts from a template', () => {
     const w = workoutFromTemplate(template, 1000);
     assert.equal(w.templateId, 1);
+    assert.equal(workoutFromTemplate({ ...template, id: -1 }, 1000).templateId, null, 'an unsaved plan is not linked');
     assert.equal(w.exercises[0].sets.length, 2);
     assert.equal(w.exercises[0].restSeconds, 90);
     assert.equal(templateChanges(w, template), null);

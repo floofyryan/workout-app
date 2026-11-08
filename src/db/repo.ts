@@ -625,6 +625,12 @@ export async function listWorkouts(db: SQLiteDatabase, limit: number, offset = 0
   return hydrateWorkouts(db, rows);
 }
 
+/** Workouts that ended at or after `since`, newest first. */
+export async function workoutsSince(db: SQLiteDatabase, since: number): Promise<WorkoutDetail[]> {
+  const rows = await db.getAllAsync<WorkoutRow>('SELECT * FROM workouts WHERE ended_at >= ? ORDER BY started_at DESC', since);
+  return hydrateWorkouts(db, rows);
+}
+
 export async function getWorkout(db: SQLiteDatabase, id: number): Promise<WorkoutDetail | null> {
   const row = await db.getFirstAsync<WorkoutRow>('SELECT * FROM workouts WHERE id = ?', id);
   if (!row) return null;

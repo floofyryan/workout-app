@@ -69,13 +69,16 @@ export function GoblinBody({
   side,
   scale,
   highlighted,
+  fills,
   onPress,
 }: {
   side: 'front' | 'back';
   /** 1 = 200 px wide. */
   scale: number;
   highlighted: ReadonlySet<string>;
-  onPress: (slug: GoblinSlug) => void;
+  /** Colours for particular muscles (e.g. the recovery map); highlighting wins over them. */
+  fills?: ReadonlyMap<string, string>;
+  onPress?: (slug: GoblinSlug) => void;
 }) {
   const view = side === 'front' ? GOBLIN_FRONT : GOBLIN_BACK;
   return (
@@ -88,8 +91,8 @@ export function GoblinBody({
       <GradientDefs />
       {view.under.map((l, i) => layerView(l, `u${i}`))}
       {view.parts.map((part) => {
-        const press = () => onPress(part.slug);
-        const fill = highlighted.has(part.slug) ? MUSCLE_HIGHLIGHT_FILL : MUSCLE_FILL;
+        const press = onPress ? () => onPress(part.slug) : undefined;
+        const fill = highlighted.has(part.slug) ? MUSCLE_HIGHLIGHT_FILL : (fills?.get(part.slug) ?? MUSCLE_FILL);
         return [
           ...part.shapes.map((s, i) => (
             <ShapeView key={`${part.slug}${i}`} shape={s} fill={fill} stroke={PALETTE.line} strokeWidth={1} onPress={press} />

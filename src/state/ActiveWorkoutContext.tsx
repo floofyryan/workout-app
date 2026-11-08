@@ -191,7 +191,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       cancelHoldNotification();
       if (template) {
         setWorkout(workoutFromTemplate(template, now));
-        markTemplateUsed(db, template.id, now);
+        if (template.id > 0) markTemplateUsed(db, template.id, now);
       } else {
         setWorkout({ name: defaultWorkoutName(now), notes: '', startedAt: now, templateId: null, exercises: [] });
       }
