@@ -305,6 +305,32 @@ describe('workouts', () => {
       assert.equal(await workoutCount(db), 2);
     }));
 
+  test("imports keep supersets and file new exercises under the other app's body part", () =>
+    withDb(async (db) => {
+      await importWorkouts(db, [
+        {
+          name: 'Mixed',
+          notes: '',
+          startedAt: 7_000,
+          durationS: 600,
+          exercises: [
+            { name: 'Lateral Raise (Dumbbell)', notes: '', sets: [set(10, 15)], supersetGroup: 1 },
+            { name: 'Triceps Pushdown (Cable)', notes: '', sets: [set(30, 12)], supersetGroup: 1 },
+            { name: 'Incline Hammer Strength Press', notes: '', sets: [set(40, 10)], bodyPartHint: 'Chest' },
+          ],
+        },
+      ]);
+      const [w] = await listWorkouts(db, 1);
+      assert.deepEqual(
+        w.exercises.map((e) => e.supersetGroup),
+        [1, 1, null],
+      );
+      const created = w.exercises[2].exercise;
+      assert.equal(created.isCustom, true);
+      assert.equal(created.bodyPart, 'Chest', 'not "Shoulders" from the word "press"');
+      assert.equal(created.equipment, 'Machine');
+    }));
+
   test('importing the same workouts twice skips duplicates and creates unknown exercises once', () =>
     withDb(async (db) => {
       const workouts = [

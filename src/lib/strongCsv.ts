@@ -1,11 +1,15 @@
 import { parseCsv, toCsv } from './csv';
-import type { SetData, SetType, UnitSystem } from './types';
+import type { BodyPart, SetData, SetType, UnitSystem } from './types';
 import { displayToKg, displayToMetres, kgToDisplay, metresToDisplay, clean } from './units';
 
 export interface ImportedExercise {
   name: string;
   notes: string;
   sets: SetData[];
+  /** Exercises sharing a number were done as a superset. */
+  supersetGroup?: number | null;
+  /** Body part the other app filed it under, used if the exercise has to be created. */
+  bodyPartHint?: BodyPart;
 }
 
 export interface ImportedWorkout {

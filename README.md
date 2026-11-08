@@ -60,8 +60,9 @@ in SQLite.
 - **Measure** – body weight, body fat and body-part measurements with charts.
 - **Tools** – plate calculator (configurable bar and plates) and 1RM calculator with percentage table.
 - **Units** – metric or imperial.
-- **Import / export** – import your history from a **Strong CSV export** (Strong → Settings →
-  Export Strong Data); exercises are matched by name and unknown ones are created. Export
+- **Import / export** – import your history from a **Strong, Hevy or FitNotes CSV export** (the
+  app is detected from the columns; Hevy supersets come along, FitNotes' built-in exercise names are
+  mapped onto ours); exercises are matched by name and unknown ones are created. Export
   everything as a Strong-compatible CSV, or back up / restore all data as JSON. **Share** a
   template or a whole program as a file (with its progression rules, without your weights) and
   import ones others send you (Settings, or the program library).

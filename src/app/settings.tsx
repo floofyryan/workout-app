@@ -10,7 +10,8 @@ import { dateStamp, pickTextFile, shareTextFile } from '@/lib/files';
 import { formatClock, parseNumber } from '@/lib/format';
 import { activeGym } from '@/lib/gyms';
 import { describeImport, pickAndImportShared } from '@/lib/sharing';
-import { parseStrongCsv, workoutsToStrongCsv } from '@/lib/strongCsv';
+import { workoutsToStrongCsv } from '@/lib/strongCsv';
+import { CSV_FORMAT_LABELS, csvStatesWeightUnit, parseWorkoutCsv } from '@/lib/workoutCsv';
 import { colors, radius, spacing } from '@/lib/theme';
 import type { UnitSystem } from '@/lib/types';
 import { weightUnit } from '@/lib/units';
@@ -60,20 +61,21 @@ export default function SettingsScreen() {
     }
   };
 
-  const importStrong = () =>
+  const importCsv = () =>
     run('import', async () => {
       const text = await pickTextFile(['text/csv', 'text/comma-separated-values', 'text/plain', '*/*']);
       if (text == null) return;
-      const units = await askUnits();
+      // Only ask about units when the file doesn't say (then it's only a fallback).
+      const units = csvStatesWeightUnit(text) ? settings.units : await askUnits();
       if (!units) return;
-      const parsed = parseStrongCsv(text, units);
+      const parsed = parseWorkoutCsv(text, units);
       if (parsed.workouts.length === 0) {
         Alert.alert('Nothing to import', 'No workouts were found in that file.');
         return;
       }
       const res = await importWorkouts(db, parsed.workouts);
       Alert.alert(
-        'Import complete',
+        `Imported from ${CSV_FORMAT_LABELS[parsed.format]}`,
         `Imported ${res.workoutsImported} workouts.` +
           (res.workoutsSkipped ? `\nSkipped ${res.workoutsSkipped} already imported.` : '') +
           (res.exercisesCreated ? `\nCreated ${res.exercisesCreated} new exercises.` : ''),
@@ -195,9 +197,17 @@ export default function SettingsScreen() {
       </Card>
 
       <SectionTitle>Data</SectionTitle>
-      <Button title="Import from Strong (CSV)" icon="download-outline" variant="secondary" onPress={importStrong} loading={busy === 'import'} />
+      <Button
+        title="Import from Strong, Hevy or FitNotes (CSV)"
+        icon="download-outline"
+        variant="secondary"
+        onPress={importCsv}
+        loading={busy === 'import'}
+      />
       <Text style={styles.hint}>
-        In Strong: Settings → Export Strong Data. Then pick the CSV file here. Already imported workouts are skipped.
+        Export your history as CSV (Strong: Settings → Export Strong Data; Hevy: Settings → Export &amp; Import Data →
+        Export Workouts; FitNotes: its spreadsheet export), then pick the file here. Already imported workouts are
+        skipped.
       </Text>
       <Button
         title="Import a shared template or program"

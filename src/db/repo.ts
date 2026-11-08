@@ -782,14 +782,14 @@ export async function importWorkouts(db: SQLiteDatabase, workouts: ImportedWorko
             'INSERT INTO exercises (name, equipment, body_part, type, is_custom) VALUES (?, ?, ?, ?, 1)',
             e.name,
             guess.equipment,
-            guess.bodyPart,
+            e.bodyPartHint ?? guess.bodyPart,
             guess.type,
           );
           id = res.lastInsertRowId;
           byName.set(e.name.toLowerCase(), id);
           summary.exercisesCreated++;
         }
-        exercises.push({ exerciseId: id, notes: e.notes, sets: e.sets });
+        exercises.push({ exerciseId: id, notes: e.notes, sets: e.sets, supersetGroup: e.supersetGroup ?? null });
       }
       const res = await db.runAsync(
         'INSERT INTO workouts (name, notes, started_at, ended_at, template_id) VALUES (?, ?, ?, ?, NULL)',

@@ -16,6 +16,21 @@ const KEYWORDS: [RegExp, BodyPart][] = [
   [/press|raise|delt|shoulder|face pull/i, 'Shoulders'],
 ];
 
+// Equipment named in the words of an exercise ("Cable Lateral Raise"), for names without a
+// "(Equipment)" suffix. More specific first ("smith machine" before "machine").
+const EQUIPMENT_WORDS: [RegExp, Equipment][] = [
+  [/smith/i, 'Smith Machine'],
+  [/\bez[- ]?(bar|curl)|\be-z\b/i, 'EZ Bar'],
+  [/trap bar|hex bar/i, 'Trap Bar'],
+  [/barbell/i, 'Barbell'],
+  [/dumbbell|\bdb\b/i, 'Dumbbell'],
+  [/kettlebell/i, 'Kettlebell'],
+  [/cable|pulley/i, 'Cable'],
+  [/machine|hammer strength/i, 'Machine'],
+  [/\bband/i, 'Band'],
+  [/bodyweight|body weight/i, 'Bodyweight'],
+];
+
 /** Best guess at metadata for an exercise name we've never seen, e.g. from an import. */
 export function guessExercise(
   name: string,
@@ -24,7 +39,9 @@ export function guessExercise(
   const paren = /\(([^)]+)\)\s*$/.exec(name)?.[1]?.trim().toLowerCase() ?? '';
   let equipment: Equipment =
     EQUIPMENT.find((e) => e.toLowerCase() === paren) ??
-    (paren === 'assisted' || paren === 'weighted' ? 'Bodyweight' : 'Other');
+    (paren === 'assisted' || paren === 'weighted' ? 'Bodyweight' : undefined) ??
+    EQUIPMENT_WORDS.find(([re]) => re.test(name))?.[1] ??
+    'Other';
 
   const hasWeight = sets.some((s) => (s.weight ?? 0) > 0);
   const hasReps = sets.some((s) => (s.reps ?? 0) > 0);
