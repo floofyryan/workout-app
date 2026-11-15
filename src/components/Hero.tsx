@@ -1,7 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
-import Body, { type Slug } from 'react-native-body-highlighter';
 import Svg, { Circle, Line, Polygon, Text as SvgText } from 'react-native-svg';
 
 import { formatNumber } from '@/lib/format';
@@ -22,7 +21,6 @@ import {
 import { colors, radius, spacing } from '@/lib/theme';
 import { kgToDisplay, weightUnit } from '@/lib/units';
 import { useSettings } from '@/state/SettingsContext';
-import { GoblinBody } from './GoblinBody';
 import { Card } from './ui';
 
 // ---------- Small pieces ----------
@@ -77,37 +75,6 @@ export function RankBadge({ rank, size = 44 }: { rank: Rank; size?: number }) {
 const xpToGo = (level: LevelInfo) =>
   level.span > 0 ? `${formatNumber(level.into)} / ${formatNumber(level.span)} XP` : `${formatNumber(level.xp)} XP · max level`;
 
-// ---------- Avatar ----------
-
-const STAT_SLUGS: Record<Stat, Slug[]> = {
-  might: ['chest', 'deltoids', 'triceps'],
-  grip: ['upper-back', 'lower-back', 'trapezius', 'biceps', 'forearm'],
-  drive: ['quadriceps', 'hamstring', 'gluteal', 'adductors', 'calves', 'tibialis'],
-  fortitude: ['abs', 'obliques', 'neck'],
-  stamina: [],
-  agility: [],
-};
-
-/** The hero: the body-map figure, with the muscles behind their strongest stat lit up. */
-export function HeroAvatar({ stat, scale = 0.42 }: { stat: Stat | null; scale?: number }) {
-  const { settings } = useSettings();
-  const slugs = stat ? STAT_SLUGS[stat] : [];
-  if (settings.bodyMapFigure === 'male' || settings.bodyMapFigure === 'female') {
-    return (
-      <Body
-        data={slugs.map((slug) => ({ slug, intensity: 1 }))}
-        side="front"
-        gender={settings.bodyMapFigure}
-        scale={scale}
-        colors={[colors.xp]}
-        defaultFill="#3B414E"
-        border={colors.faint}
-      />
-    );
-  }
-  return <GoblinBody side="front" scale={scale} highlighted={new Set<string>(slugs)} />;
-}
-
 // ---------- Hero summary ----------
 
 /** Compact level bar for the Workout tab: rank, level, XP and this week's quests at a glance. */
@@ -147,10 +114,7 @@ export function HeroCard({ progress, name, onRename }: { progress: Progress; nam
   const { level, rank } = progress;
   return (
     <Card style={styles.heroCard}>
-      <View style={styles.avatar}>
-        <HeroAvatar stat={progress.heroClass.stat} />
-      </View>
-      <View style={{ flex: 1, marginLeft: spacing.lg }}>
+      <View style={{ flex: 1 }}>
         <Text style={styles.heroName} numberOfLines={1} onPress={onRename} accessibilityHint="Rename your hero">
           {name} <Ionicons name="pencil" size={13} color={colors.faint} />
         </Text>
@@ -418,7 +382,6 @@ const styles = StyleSheet.create({
   heroBarXp: { color: colors.faint, fontSize: 11, marginTop: 4, fontVariant: ['tabular-nums'] },
 
   heroCard: { flexDirection: 'row', alignItems: 'center' },
-  avatar: { alignItems: 'center', justifyContent: 'center' },
   heroName: { color: colors.text, fontSize: 22, fontWeight: '800' },
   heroClass: { color: colors.muted, fontSize: 14, fontWeight: '600', marginTop: 2 },
   levelLabel: { color: colors.faint, fontSize: 11, fontWeight: '800', letterSpacing: 1 },
