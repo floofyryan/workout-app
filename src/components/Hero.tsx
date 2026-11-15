@@ -20,6 +20,7 @@ import {
   type WorkoutReward,
 } from '@/lib/rpg';
 import { colors, radius, spacing } from '@/lib/theme';
+import { kgToDisplay, weightUnit } from '@/lib/units';
 import { useSettings } from '@/state/SettingsContext';
 import { GoblinBody } from './GoblinBody';
 import { Card } from './ui';
@@ -287,6 +288,9 @@ const ACHIEVEMENT_ICONS: Record<Achievement['icon'], React.ComponentProps<typeof
 };
 
 export function AchievementList({ achievements }: { achievements: Achievement[] }) {
+  const { settings } = useSettings();
+  // Weight goals are kept in kg and shown in the user's unit.
+  const amount = (a: Achievement, v: number) => formatNumber(Math.floor(a.weight ? kgToDisplay(v, settings.units) : v));
   // Unlocked first; of the locked ones, only the next step of each kind keeps the list short.
   const seen = new Set<string>();
   const shown = achievements.filter((a) => {
@@ -308,8 +312,8 @@ export function AchievementList({ achievements }: { achievements: Achievement[] 
               {a.title}
             </Text>
             <Text style={styles.achievementText} numberOfLines={2}>
-              {a.description}
-              {a.unlocked ? '' : ` · ${formatNumber(Math.floor(a.value))}/${formatNumber(a.goal)}`}
+              {a.description.replace('%s', `${amount(a, a.goal)} ${weightUnit(settings.units)}`)}
+              {a.unlocked ? '' : ` · ${amount(a, a.value)}/${amount(a, a.goal)}`}
             </Text>
           </View>
         </View>

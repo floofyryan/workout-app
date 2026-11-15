@@ -233,6 +233,8 @@ interface AchievementDef {
   description: string;
   icon: 'footsteps' | 'calendar' | 'flame' | 'trophy' | 'barbell' | 'star' | 'ribbon';
   goal: number;
+  /** Goal and progress are weights in kg; "%s" in the description is the goal in the user's unit. */
+  weight?: true;
   value: (t: Totals) => number;
 }
 
@@ -248,10 +250,10 @@ const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'r1', title: 'Limit Breaker', description: 'Beat a personal record', icon: 'trophy', goal: 1, value: (t) => t.records },
   { id: 'r25', title: 'Record Hunter', description: 'Beat your records 25 times', icon: 'trophy', goal: 25, value: (t) => t.records },
   { id: 'r100', title: 'Record Slayer', description: 'Beat your records 100 times', icon: 'trophy', goal: 100, value: (t) => t.records },
-  { id: 'v1', title: 'Car Lifter', description: 'Lift 1,500 kg in total', icon: 'barbell', goal: 1500, value: (t) => t.volumeKg },
-  { id: 'v2', title: 'Elephant Lifter', description: 'Lift 6,000 kg in total', icon: 'barbell', goal: 6000, value: (t) => t.volumeKg },
-  { id: 'v3', title: 'Whale Lifter', description: 'Lift 150,000 kg in total', icon: 'barbell', goal: 150_000, value: (t) => t.volumeKg },
-  { id: 'v4', title: 'Mountain Mover', description: 'Lift 1,000,000 kg in total', icon: 'barbell', goal: 1_000_000, value: (t) => t.volumeKg },
+  { id: 'v1', title: 'Car Lifter', description: 'Lift %s in total', icon: 'barbell', weight: true, goal: 1500, value: (t) => t.volumeKg },
+  { id: 'v2', title: 'Elephant Lifter', description: 'Lift %s in total', icon: 'barbell', weight: true, goal: 6000, value: (t) => t.volumeKg },
+  { id: 'v3', title: 'Whale Lifter', description: 'Lift %s in total', icon: 'barbell', weight: true, goal: 150_000, value: (t) => t.volumeKg },
+  { id: 'v4', title: 'Mountain Mover', description: 'Lift %s in total', icon: 'barbell', weight: true, goal: 1_000_000, value: (t) => t.volumeKg },
   { id: 'q10', title: 'Quest Taker', description: 'Complete 10 weekly quests', icon: 'ribbon', goal: 10, value: (t) => t.questsDone },
   { id: 'q50', title: 'Quest Master', description: 'Complete 50 weekly quests', icon: 'ribbon', goal: 50, value: (t) => t.questsDone },
   { id: 'all5', title: 'No Weak Points', description: 'Reach level 5 in every stat', icon: 'star', goal: 5, value: (t) => t.minStatLevel },
