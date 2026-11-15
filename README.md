@@ -50,7 +50,12 @@ in SQLite.
   - **Achievements** with progress bars: First Blood, Monster Hunter, Dragon Slayer, Iron Will (4-week
     streak), Centurion (100 kg set), Wanderer (5 km), Zen Master, Veteran, Renaissance Hero, Dungeon
     Regular and Legendary Slayer.
-  - Profile shows the character sheet, gear and achievements; the finished-workout screen shows XP
+  - **Weekly quests**: three a week (a big one, a body-part one and a side quest, e.g. "Finish 3
+    workouts", "Train legs in 2 workouts", "Do 6 warm-up sets"), worth 100–150 bonus XP each. Quests
+    can complete mid-fight, and their XP counts toward your level.
+  - **Bestiary**: all 27 monsters, with how many of each you've slain; undiscovered ones show as
+    shadows with "???". New discoveries are announced when you finish a workout.
+  - Profile shows the character sheet, gear, weekly quests, the bestiary and achievements; the finished-workout screen shows XP
     earned, monsters slain, level-ups, new gear, unlocked achievements and attribute gains. It's all derived from your history, so imported workouts count too.
 - **Tracking types** – weight & reps, reps only, weighted bodyweight (+kg), assisted bodyweight
   (−kg), duration, distance & duration.

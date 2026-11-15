@@ -3,13 +3,13 @@ import { useLayoutEffect, useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BarChart } from '@/components/Charts';
-import { AchievementGrid, CharacterSheet } from '@/components/CharacterSheet';
+import { AchievementGrid, CharacterSheet, QuestBoard } from '@/components/CharacterSheet';
 import { Card, IconButton, ListItem, SectionTitle, Stat } from '@/components/ui';
 import { WorkoutCard } from '@/components/WorkoutCard';
 import { getStatEntries, listWorkouts, workoutCount, workoutStartTimes } from '@/db/repo';
 import { formatShortDate, startOfDay, startOfWeek } from '@/lib/format';
 import { useFocusQuery, useNow } from '@/lib/hooks';
-import { achievementsFrom, characterFrom } from '@/lib/rpg';
+import { achievementsFrom, bestiaryFrom, heroFrom, weeklyQuests } from '@/lib/rpg';
 import { colors, radius, spacing } from '@/lib/theme';
 import { useSettings } from '@/state/SettingsContext';
 
@@ -35,8 +35,10 @@ export default function ProfileScreen() {
         total: await workoutCount(db),
         starts: await workoutStartTimes(db, since),
         recent: await listWorkouts(db, 1),
-        character: entries ? characterFrom(entries) : null,
+        character: entries ? heroFrom(entries) : null,
         achievements: entries ? achievementsFrom(entries) : null,
+        quests: entries ? weeklyQuests(startOfWeek(Date.now()), entries) : null,
+        bestiary: entries ? bestiaryFrom(entries) : null,
       };
     },
     [settings.adventureMode],
@@ -72,6 +74,25 @@ export default function ProfileScreen() {
         <>
           <SectionTitle>Character</SectionTitle>
           <CharacterSheet character={data.character} />
+          {data.quests && (
+            <>
+              <SectionTitle>Weekly quests</SectionTitle>
+              <QuestBoard
+                quests={data.quests}
+                resetsInDays={Math.max(1, Math.ceil((startOfWeek(now) + WEEK_MS - now) / 86_400_000))}
+              />
+            </>
+          )}
+          {data.bestiary && (
+            <View style={[styles.list, { marginTop: spacing.md }]}>
+              <ListItem
+                icon="book-outline"
+                title="Bestiary"
+                subtitle={`${data.bestiary.filter((m) => m.kills > 0).length} of ${data.bestiary.length} monsters discovered`}
+                onPress={() => router.push('/bestiary')}
+              />
+            </View>
+          )}
           {data.achievements && (
             <>
               <SectionTitle>

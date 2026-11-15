@@ -1,7 +1,16 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { GEAR_TIERS, gearTier, nextGear, STAT_INFO, STATS, type Achievement, type Character } from '@/lib/rpg';
+import {
+  GEAR_TIERS,
+  gearTier,
+  nextGear,
+  STAT_INFO,
+  STATS,
+  type Achievement,
+  type Character,
+  type Quest,
+} from '@/lib/rpg';
 import { colors, radius, spacing } from '@/lib/theme';
 import { HeroSprite } from './RpgSprites';
 import { Card } from './ui';
@@ -27,6 +36,7 @@ export function CharacterSheet({ character: c }: { character: Character }) {
           <Text style={styles.small}>
             {c.level.into} / {c.level.span} XP to level {c.level.level + 1} · {c.slain} monsters slain
           </Text>
+          {c.questXp > 0 ? <Text style={styles.small}>{c.questXp} XP from quests</Text> : null}
         </View>
       </View>
       <View style={styles.gear}>
@@ -57,6 +67,40 @@ export function CharacterSheet({ character: c }: { character: Character }) {
           );
         })}
       </View>
+    </Card>
+  );
+}
+
+/** This week's three quests with progress and rewards. */
+export function QuestBoard({ quests, resetsInDays }: { quests: Quest[]; resetsInDays: number }) {
+  return (
+    <Card style={{ gap: spacing.md }}>
+      {quests.map((q) => (
+        <View key={q.id} style={styles.questRow}>
+          <Ionicons
+            name={q.done ? 'checkmark-circle' : 'ellipse-outline'}
+            size={22}
+            color={q.done ? colors.success : colors.faint}
+          />
+          <View style={{ flex: 1 }}>
+            <View style={styles.statLabelRow}>
+              <Text style={[styles.statName, q.done && { color: colors.muted, textDecorationLine: 'line-through' }]}>{q.name}</Text>
+              <Text style={[styles.questReward, q.done && { color: colors.success }]}>+{q.reward} XP</Text>
+            </View>
+            <Text style={styles.small}>
+              {q.description} · {Math.floor(q.progress)}/{q.target}
+            </Text>
+            {!q.done && (
+              <View style={styles.statTrack}>
+                <View style={[styles.statFill, { width: `${(q.progress / q.target) * 100}%`, backgroundColor: colors.warning }]} />
+              </View>
+            )}
+          </View>
+        </View>
+      ))}
+      <Text style={[styles.small, { textAlign: 'center' }]}>
+        New quests in {resetsInDays} day{resetsInDays === 1 ? '' : 's'}
+      </Text>
     </Card>
   );
 }
@@ -92,6 +136,8 @@ export function AchievementGrid({ achievements }: { achievements: Achievement[] 
 }
 
 const styles = StyleSheet.create({
+  questRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  questReward: { color: colors.warning, fontSize: 12, fontWeight: '700' },
   gear: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.md },
   gearText: { color: colors.text, fontSize: 13, fontWeight: '600', flex: 1 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },

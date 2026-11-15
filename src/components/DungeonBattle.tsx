@@ -7,18 +7,21 @@ import Svg, { Circle, Ellipse, Path, Rect } from 'react-native-svg';
 import { getRecordsBefore, getStatEntries } from '@/db/repo';
 import type { ActiveWorkout } from '@/lib/activeWorkout';
 import type { Records } from '@/lib/calc';
-import { formatClock } from '@/lib/format';
+import { formatClock, startOfWeek } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
 import {
   beatsRecord,
-  characterFrom,
+  heroFrom,
   dungeonProgress,
   gearTier,
   levelFromXp,
   monsterFor,
   nextEncounter,
   setXp,
+  weeklyQuests,
+  type AchievementEntry,
   type Monster,
+  type Quest,
   type StatSource,
 } from '@/lib/rpg';
 import { formatSet } from '@/lib/setFormat';
@@ -41,6 +44,34 @@ function sessionXp(w: ActiveWorkout, exercises: Map<number, Exercise>): number {
     for (const s of e.sets) if (s.completed) xp += setXp(type, s);
   }
   return xp;
+}
+
+/** The live workout's completed sets as history entries (for quest progress). */
+function sessionEntries(w: ActiveWorkout, exercises: Map<number, Exercise>): AchievementEntry[] {
+  return w.exercises.flatMap((e) => {
+    const ex = exercises.get(e.exerciseId);
+    const source = ex ? { type: ex.type, bodyPart: ex.bodyPart, category: ex.category } : UNKNOWN;
+    return e.sets
+      .filter((s) => s.completed)
+      .map((set) => ({ ...source, set, workoutId: -1, startedAt: w.startedAt, exerciseId: e.exerciseId, workoutExerciseId: -1 }));
+  });
+}
+
+interface History {
+  /** XP (including quest rewards) from workouts before this one. */
+  baseXp: number;
+  /** Sets from earlier workouts in the same week, for this week's quests. */
+  week: AchievementEntry[];
+}
+
+const questXp = (quests: Quest[]) => quests.reduce((n, q) => n + (q.done ? q.reward : 0), 0);
+
+/** Total hero XP so far, counting this workout's sets and the quests they complete. */
+function progressOf(w: ActiveWorkout, exercises: Map<number, Exercise>, h: History) {
+  const weekStart = startOfWeek(w.startedAt);
+  const quests = weeklyQuests(weekStart, [...h.week, ...sessionEntries(w, exercises)]);
+  const bonus = questXp(quests) - questXp(weeklyQuests(weekStart, h.week));
+  return { total: h.baseXp + sessionXp(w, exercises) + bonus, quests };
 }
 
 /** What the set asks for, e.g. "100 kg × 5", using last time's numbers for blank fields. */
@@ -66,6 +97,8 @@ interface Slain {
   record: boolean;
   /** New hero level when this kill levelled up. */
   levelUp: number | null;
+  /** Weekly quests this kill completed. */
+  quests: string[];
 }
 
 /**
@@ -78,15 +111,13 @@ export function DungeonBattle({ workout, units }: { workout: ActiveWorkout; unit
   const now = useNow(500);
 
   // XP from earlier workouts (for the hero's level and gear) and each exercise's records so far.
-  const [baseXp, setBaseXp] = useState<number | null>(null);
-  const baseXpRef = useRef<number | null>(null);
+  const [history, setHistory] = useState<History | null>(null);
   useEffect(() => {
     let active = true;
     getStatEntries(db, workout.startedAt).then((entries) => {
       if (!active) return;
-      const xp = characterFrom(entries).xp;
-      baseXpRef.current = xp;
-      setBaseXp(xp);
+      const weekStart = startOfWeek(workout.startedAt);
+      setHistory({ baseXp: heroFrom(entries).xp, week: entries.filter((e) => startOfWeek(e.startedAt) === weekStart) });
     });
     return () => {
       active = false;
@@ -114,7 +145,18 @@ export function DungeonBattle({ workout, units }: { workout: ActiveWorkout; unit
   const encounter = nextEncounter(workout);
   const { done, total } = dungeonProgress(workout);
   const xp = useMemo(() => sessionXp(workout, exercises), [workout, exercises]);
-  const heroLevel = baseXp == null ? null : levelFromXp(baseXp + xp).level;
+  const progress = useMemo(() => (history ? progressOf(workout, exercises, history) : null), [workout, exercises, history]);
+  const heroLevel = progress ? levelFromXp(progress.total).level : null;
+
+  // Progress as of the last change, to tell which kill levelled up or finished a quest.
+  const workoutRef = useRef(workout);
+  useEffect(() => {
+    workoutRef.current = workout;
+  }, [workout]);
+  const lastProgress = useRef<ReturnType<typeof progressOf> | null>(null);
+  useEffect(() => {
+    if (history) lastProgress.current = progressOf(workoutRef.current, exercises, history);
+  }, [history, exercises]);
 
   const current = encounter ? workout.exercises[encounter.exerciseIndex] : null;
   const currentEx = current ? exercises.get(current.exerciseId) : undefined;
@@ -170,17 +212,21 @@ export function DungeonBattle({ workout, units }: { workout: ActiveWorkout; unit
             slain.record ||= record;
           } else {
             const monster = monsterFor(source, e.sets, i, previous.get(e.exerciseId), recs);
-            slain = { monster, xp: gained, record, levelUp: null };
+            slain = { monster, xp: gained, record, levelUp: null, quests: [] };
           }
         }
       });
     }
     prevCompleted.current = completed;
+    const last = lastProgress.current;
+    const cur = history ? progressOf(workout, exercises, history) : null;
+    lastProgress.current = cur;
     if (!slain) return;
-    if (baseXpRef.current != null) {
-      const total = baseXpRef.current + sessionXp(workout, exercises);
-      const after = levelFromXp(total).level;
-      if (after > levelFromXp(total - slain.xp).level) slain.levelUp = after;
+    if (last && cur) {
+      const after = levelFromXp(cur.total).level;
+      if (after > levelFromXp(last.total).level) slain.levelUp = after;
+      const doneBefore = new Set(last.quests.filter((q) => q.done).map((q) => q.id));
+      slain.quests = cur.quests.filter((q) => q.done && !doneBefore.has(q.id)).map((q) => q.name);
     }
 
     setDying(slain);
@@ -206,7 +252,7 @@ export function DungeonBattle({ workout, units }: { workout: ActiveWorkout; unit
             Animated.timing(monsterScale, { toValue: 0.5, duration: 380, ...driver }),
           ]),
         ]),
-        Animated.timing(xpFloat, { toValue: 1, duration: slain.levelUp || slain.record ? 1900 : 1100, easing: Easing.out(Easing.quad), ...driver }),
+        Animated.timing(xpFloat, { toValue: 1, duration: slain.levelUp || slain.record || slain.quests.length ? 1900 : 1100, easing: Easing.out(Easing.quad), ...driver }),
       ]),
     ]);
     attackAnim.current?.stop();
@@ -333,6 +379,11 @@ export function DungeonBattle({ workout, units }: { workout: ActiveWorkout; unit
                 ]}
               >
                 {dying.levelUp ? <Text style={[styles.float, { color: '#4ADE80' }]}>LEVEL {dying.levelUp}!</Text> : null}
+                {dying.quests.map((q) => (
+                  <Text key={q} style={[styles.float, { color: '#38BDF8' }]}>
+                    QUEST: {q.toUpperCase()}!
+                  </Text>
+                ))}
                 {dying.record ? <Text style={[styles.float, { color: '#E879F9' }]}>NEW RECORD!</Text> : null}
                 <Text style={styles.float}>+{dying.xp} XP</Text>
               </Animated.View>

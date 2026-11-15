@@ -11,9 +11,15 @@ import { workoutVolume } from '@/components/WorkoutCard';
 import { MonsterSprite } from '@/components/RpgSprites';
 import { deleteWorkout, getRecordsBefore, getStatEntries, getWorkout, saveTemplate } from '@/db/repo';
 import { computeRecords, estimate1RM, newRecords, RECORD_LABELS, type RecordKey } from '@/lib/calc';
-import { formatDate, formatDuration, formatNumber, formatTime } from '@/lib/format';
+import { formatDate, formatDuration, formatNumber, formatTime, startOfWeek } from '@/lib/format';
 import { useFocusQuery } from '@/lib/hooks';
-import { achievementsFrom, characterFrom, gearTier, GEAR_TIERS, STAT_INFO, STATS, type Stat as Attribute } from '@/lib/rpg';
+import {
+  achievementsFrom,
+  bestiaryFrom,
+  gearTier,
+  heroFrom,
+  weeklyQuests,
+  GEAR_TIERS, STAT_INFO, STATS, type Stat as Attribute } from '@/lib/rpg';
 import { formatSet, SET_TYPE_LABEL } from '@/lib/setFormat';
 import { colors, radius, spacing } from '@/lib/theme';
 import { exerciseCategory, type Template, type WorkoutDetail } from '@/lib/types';
@@ -32,6 +38,10 @@ interface QuestReward {
   unlocked: string[];
   /** New gear when the level-up reached a new tier. */
   newGear: string | null;
+  /** Weekly quests this workout completed. */
+  quests: { name: string; reward: number }[];
+  /** Monsters slain for the first time. */
+  discovered: string[];
 }
 
 /** XP, kills, level-ups and attribute gains from one workout, against everything done before it. */
@@ -45,11 +55,17 @@ async function questReward(db: Parameters<typeof getStatEntries>[0], w: WorkoutD
       set,
       workoutId: w.id,
       startedAt: w.startedAt,
+      exerciseId: e.exercise.id,
+      workoutExerciseId: -e.id,
     })),
   );
+  const all = [...before, ...own];
+  const week = startOfWeek(w.startedAt);
+  const questsBefore = new Set(weeklyQuests(week, before).filter((q) => q.done).map((q) => q.id));
+  const seen = new Set(bestiaryFrom(before).filter((m) => m.kills > 0).map((m) => m.name));
   const had = new Set(achievementsFrom(before).filter((x) => x.unlocked).map((x) => x.id));
-  const a = characterFrom(before);
-  const b = characterFrom([...before, ...own]);
+  const a = heroFrom(before);
+  const b = heroFrom(all);
   return {
     xp: b.xp - a.xp,
     slain: b.slain - a.slain,
@@ -57,7 +73,13 @@ async function questReward(db: Parameters<typeof getStatEntries>[0], w: WorkoutD
     levelAfter: b.level.level,
     title: b.title,
     gains: STATS.filter((s) => b.stats[s].value > a.stats[s].value).map((stat) => ({ stat, to: b.stats[stat].value })),
-    unlocked: achievementsFrom([...before, ...own])
+    quests: weeklyQuests(week, all)
+      .filter((q) => q.done && !questsBefore.has(q.id))
+      .map((q) => ({ name: q.name, reward: q.reward })),
+    discovered: bestiaryFrom(all)
+      .filter((m) => m.kills > 0 && !seen.has(m.name))
+      .map((m) => m.name),
+    unlocked: achievementsFrom(all)
       .filter((x) => x.unlocked && !had.has(x.id))
       .map((x) => x.name),
     newGear:
@@ -276,6 +298,20 @@ function QuestRewardCard({ reward: r, summary, prs }: { reward: QuestReward; sum
             Level up! {r.levelBefore} → {r.levelAfter} · {r.title}
             {r.newGear ? `\nNew gear: ${r.newGear}` : ''}
           </Text>
+        </View>
+      )}
+      {r.quests.map((q) => (
+        <View key={q.name} style={styles.levelUp}>
+          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+          <Text style={styles.levelUpText}>
+            Quest complete: {q.name} <Text style={{ color: colors.warning }}>+{q.reward} XP</Text>
+          </Text>
+        </View>
+      ))}
+      {r.discovered.length > 0 && (
+        <View style={styles.levelUp}>
+          <Ionicons name="book" size={18} color="#E879F9" />
+          <Text style={styles.levelUpText}>New in your bestiary: {r.discovered.join(', ')}</Text>
         </View>
       )}
       {r.unlocked.map((name) => (

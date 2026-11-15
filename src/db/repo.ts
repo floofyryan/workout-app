@@ -618,15 +618,24 @@ export async function getRecordsBefore(
  */
 export async function getStatEntries(db: SQLiteDatabase, before = Number.MAX_SAFE_INTEGER): Promise<AchievementEntry[]> {
   const rows = await db.getAllAsync<
-    SetRow & { type: string; body_part: string; category: string | null; workout_id: number; started_at: number }
+    SetRow & {
+      type: string;
+      body_part: string;
+      category: string | null;
+      workout_id: number;
+      started_at: number;
+      exercise_id: number;
+      we_id: number;
+    }
   >(
     `SELECT s.set_type, s.weight, s.reps, s.duration_s, s.distance_m, s.rpe, e.type, e.body_part, e.category,
-            w.id AS workout_id, w.started_at
+            w.id AS workout_id, w.started_at, we.exercise_id, we.id AS we_id
      FROM workout_sets s
      JOIN workout_exercises we ON we.id = s.workout_exercise_id
      JOIN workouts w ON w.id = we.workout_id
      JOIN exercises e ON e.id = we.exercise_id
-     WHERE w.started_at < ?`,
+     WHERE w.started_at < ?
+     ORDER BY w.started_at, w.id, we.position, s.position`,
     before,
   );
   return rows.map((r) => ({
@@ -636,6 +645,8 @@ export async function getStatEntries(db: SQLiteDatabase, before = Number.MAX_SAF
     set: toSet(r),
     workoutId: r.workout_id,
     startedAt: r.started_at,
+    exerciseId: r.exercise_id,
+    workoutExerciseId: r.we_id,
   }));
 }
 

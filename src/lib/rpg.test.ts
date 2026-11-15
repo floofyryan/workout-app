@@ -6,6 +6,14 @@ import { newActiveSet, type ActiveWorkout } from './activeWorkout';
 import { computeRecords } from './calc';
 import {
   achievementsFrom,
+  bestiaryCatalog,
+  bestiaryFrom,
+  heroFrom,
+  questBonusXp,
+  questDefsForWeek,
+  QUEST_SLOTS,
+  weeklyQuests,
+  type AchievementEntry,
   characterFrom,
   gearTier,
   longestWeekStreak,
@@ -144,6 +152,8 @@ describe('achievements', () => {
       set: s,
       workoutId,
       startedAt: monday + (workoutId - 1) * WEEK,
+      exerciseId: 1,
+      workoutExerciseId: workoutId,
     });
     const list = achievementsFrom([entry(1, set(80, 5)), entry(2, set(105, 3, 'failure')), entry(3, set(60, 5)), entry(4, set(60, 5))]);
     const get = (id: string) => list.find((a) => a.id === id)!;
@@ -154,6 +164,75 @@ describe('achievements', () => {
     assert.equal(get('hunter').unlocked, false);
     assert.equal(get('hunter').progress, 4);
     assert.equal(achievementsFrom([]).some((a) => a.unlocked), false);
+  });
+});
+
+const monday = new Date(2026, 0, 5, 12).getTime();
+let weId = 0;
+/** Sets of one exercise in one workout, as history entries. */
+function logged(
+  workoutId: number,
+  startedAt: number,
+  source: { type: 'weight_reps' | 'duration' | 'reps'; bodyPart: AchievementEntry['bodyPart']; category: string | null },
+  sets: SetData[],
+  exerciseId = 1,
+): AchievementEntry[] {
+  const id = ++weId;
+  return sets.map((set) => ({ ...source, set, workoutId, startedAt, exerciseId, workoutExerciseId: id }));
+}
+const squat = { type: 'weight_reps' as const, bodyPart: 'Quads' as const, category: 'strength' };
+
+describe('weekly quests', () => {
+  it('picks one quest per slot, the same for the whole week', () => {
+    const q = questDefsForWeek(monday);
+    assert.equal(q.length, QUEST_SLOTS.length);
+    q.forEach((def, i) => assert.ok(QUEST_SLOTS[i].includes(def)));
+    assert.deepEqual(questDefsForWeek(monday).map((d) => d.id), q.map((d) => d.id));
+  });
+  it('varies between weeks', () => {
+    const ids = new Set(Array.from({ length: 12 }, (_, i) => questDefsForWeek(new Date(2026, 0, 5 + 7 * i).getTime()).map((d) => d.id).join()));
+    assert.ok(ids.size > 3);
+  });
+  it('tracks progress within the week and rewards completion', () => {
+    const week = new Date(2026, 0, 5).getTime();
+    const defs = questDefsForWeek(week);
+    assert.ok(weeklyQuests(week, []).every((q) => !q.done && q.progress === 0));
+    // Plenty of everything in one week completes every quest.
+    const many: AchievementEntry[] = [];
+    for (let w = 1; w <= 4; w++) {
+      const t = monday + w * 3_600_000;
+      many.push(...logged(w, t, squat, [set(60, 5, 'warmup'), set(60, 5, 'warmup'), ...Array(10).fill(set(100, 8))]));
+      many.push(...logged(w, t, { type: 'weight_reps', bodyPart: 'Chest', category: null }, Array(5).fill(set(80, 8))));
+      many.push(...logged(w, t, { type: 'reps', bodyPart: 'Core', category: null }, Array(3).fill(set(null, 20))));
+      many.push(...logged(w, t, { type: 'duration', bodyPart: 'Cardio', category: 'cardio' }, [{ ...set(null, null), durationS: 600 }]));
+      many.push(...logged(w, t, { type: 'duration', bodyPart: 'Hamstrings', category: 'stretching' }, Array(2).fill({ ...set(null, null), durationS: 30 })));
+    }
+    const quests = weeklyQuests(week, many);
+    assert.ok(quests.every((q) => q.done), JSON.stringify(quests));
+    const bonus = defs.reduce((n, d) => n + d.reward, 0);
+    assert.equal(questBonusXp(many), bonus);
+    assert.equal(heroFrom(many).xp, characterFrom(many).xp + bonus);
+    assert.equal(heroFrom(many).questXp, bonus);
+  });
+});
+
+describe('bestiary', () => {
+  it('lists every monster once', () => {
+    const names = bestiaryCatalog().map((m) => m.name);
+    assert.equal(new Set(names).size, names.length);
+    assert.ok(names.includes('Record Keeper'));
+  });
+  it('counts kills, including record keepers from earlier bests', () => {
+    const entries = [
+      ...logged(1, monday, squat, [set(40, 10, 'warmup'), set(100, 5), set(100, 5)]),
+      ...logged(2, monday + 86_400_000, squat, [set(100, 5), set(110, 5)]),
+    ];
+    const kills = Object.fromEntries(bestiaryFrom(entries).map((m) => [m.name, m.kills]));
+    assert.equal(kills['Warm-up Slime'], 1);
+    assert.equal(kills['Squat Ogre'], 2);
+    assert.equal(kills['Ogre Chieftain'], 1);
+    assert.equal(kills['Record Keeper'], 1);
+    assert.equal(kills['Golem Quarry'], undefined);
   });
 });
 

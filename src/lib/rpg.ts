@@ -139,7 +139,10 @@ export interface StatEntry extends StatSource {
 }
 
 export interface Character {
+  /** Total XP: from sets plus quest rewards. */
   xp: number;
+  /** Part of the XP that came from weekly quests. */
+  questXp: number;
   level: LevelInfo;
   /** Monsters slain: completed working sets (warm-ups count as slimes but not here). */
   slain: number;
@@ -165,14 +168,17 @@ export function addXp(totals: { xp: number; slain: number; stats: Record<Stat, n
   return totals;
 }
 
-export function characterFrom(entries: StatEntry[]): Character {
+/** The character from logged sets, plus `questXp` bonus XP (quests add to the level, not attributes). */
+export function characterFrom(entries: StatEntry[], questXp = 0): Character {
   const t = addXp({ xp: 0, slain: 0, stats: emptyStatXp() }, entries);
+  t.xp += questXp;
   const level = levelFromXp(t.xp);
   let top: Stat | null = null;
   for (const s of STATS) if (t.stats[s] > 0 && (top == null || t.stats[s] > t.stats[top])) top = s;
   const className = top ? STAT_INFO[top].className : 'Adventurer';
   return {
     xp: t.xp,
+    questXp,
     level,
     slain: t.slain,
     stats: Object.fromEntries(STATS.map((s) => [s, { xp: t.stats[s], value: statValue(t.stats[s]) }])) as Character['stats'],
@@ -326,9 +332,13 @@ export function dungeonProgress(w: ActiveWorkout): { done: number; total: number
 
 // ---------- Achievements ----------
 
+/** A logged set with where and when it was done. */
 export interface AchievementEntry extends StatEntry {
   workoutId: number;
   startedAt: number;
+  exerciseId: number;
+  /** Groups the sets of one exercise within one workout. */
+  workoutExerciseId: number;
 }
 
 export interface Achievement {
@@ -359,7 +369,7 @@ export function longestWeekStreak(times: number[]): number {
 
 /** Badges earned from the whole history, each with progress toward it. */
 export function achievementsFrom(entries: AchievementEntry[]): Achievement[] {
-  const c = characterFrom(entries);
+  const c = heroFrom(entries);
   const workouts = new Map<number, number>();
   let failures = 0;
   let heaviest = 0;
@@ -391,4 +401,151 @@ export function achievementsFrom(entries: AchievementEntry[]): Achievement[] {
     { id: 'legend', name: 'Legendary Slayer', description: 'Slay 1,000 monsters', icon: 'skull', progress: c.slain, target: 1000 },
   ];
   return list.map((a) => ({ ...a, progress: Math.min(a.progress, a.target), unlocked: a.progress >= a.target }));
+}
+
+// ---------- Weekly quests ----------
+
+export interface QuestDef {
+  id: string;
+  name: string;
+  description: string;
+  target: number;
+  /** Bonus XP for completing it. */
+  reward: number;
+  progress: (week: AchievementEntry[]) => number;
+}
+
+export interface Quest extends Omit<QuestDef, 'progress'> {
+  progress: number;
+  done: boolean;
+}
+
+const isWorking = (e: AchievementEntry) => e.set.setType !== 'warmup';
+const workoutsTraining = (stat: Stat) => (es: AchievementEntry[]) =>
+  new Set(es.filter((e) => isWorking(e) && statShares(e)[stat]).map((e) => e.workoutId)).size;
+const setsTraining = (stat: Stat) => (es: AchievementEntry[]) => es.filter((e) => isWorking(e) && statShares(e)[stat]).length;
+
+/** Each week has one quest from each slot: a big one, a body-part one and a side quest. */
+export const QUEST_SLOTS: QuestDef[][] = [
+  [
+    { id: 'workouts', name: 'Dungeon Crawler', description: 'Finish 3 workouts', target: 3, reward: 150, progress: (es) => new Set(es.map((e) => e.workoutId)).size },
+    { id: 'slay', name: 'Monster Cull', description: 'Slay 40 monsters', target: 40, reward: 150, progress: (es) => es.filter(isWorking).length },
+    { id: 'xp', name: 'Treasure Hunter', description: 'Earn 600 XP from sets', target: 600, reward: 150, progress: (es) => es.reduce((n, e) => n + setXp(e.type, e.set), 0) },
+  ],
+  [
+    { id: 'legs', name: 'Ogre Country', description: 'Train legs in 2 workouts', target: 2, reward: 100, progress: workoutsTraining('CON') },
+    { id: 'upper', name: 'Golem Quarry', description: 'Train upper body in 2 workouts', target: 2, reward: 100, progress: workoutsTraining('STR') },
+    { id: 'core', name: 'Crypt Patrol', description: 'Do 8 core, plyo or Olympic sets', target: 8, reward: 100, progress: setsTraining('DEX') },
+  ],
+  [
+    { id: 'stretch', name: 'Inner Peace', description: 'Do 8 stretching sets', target: 8, reward: 100, progress: setsTraining('WIS') },
+    { id: 'cardio', name: 'Bat Hunt', description: 'Do 2 cardio sets', target: 2, reward: 100, progress: setsTraining('STA') },
+    { id: 'warmup', name: 'Slime Sweeper', description: 'Do 6 warm-up sets', target: 6, reward: 100, progress: (es) => es.filter((e) => !isWorking(e)).length },
+  ],
+];
+
+function mix(n: number): number {
+  n = Math.imul(n ^ (n >>> 16), 0x45d9f3b);
+  n = Math.imul(n ^ (n >>> 16), 0x45d9f3b);
+  return (n ^ (n >>> 16)) >>> 0;
+}
+
+/** The quests of the week starting at `weekStart` (always the same for a given week). */
+export function questDefsForWeek(weekStart: number): QuestDef[] {
+  const d = new Date(weekStart);
+  const seed = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  return QUEST_SLOTS.map((slot, i) => slot[mix(seed * 7 + i) % slot.length]);
+}
+
+/** This week's quests with progress from the sets done that week. */
+export function weeklyQuests(weekStart: number, entries: AchievementEntry[]): Quest[] {
+  const week = entries.filter((e) => startOfWeek(e.startedAt) === weekStart);
+  return questDefsForWeek(weekStart).map(({ progress, ...q }) => {
+    const p = progress(week);
+    return { ...q, progress: Math.min(p, q.target), done: p >= q.target };
+  });
+}
+
+/** Bonus XP from every quest completed in the history. */
+export function questBonusXp(entries: AchievementEntry[]): number {
+  const weeks = new Set(entries.map((e) => startOfWeek(e.startedAt)));
+  let xp = 0;
+  for (const w of weeks) for (const q of weeklyQuests(w, entries)) if (q.done) xp += q.reward;
+  return xp;
+}
+
+/** The character including quest rewards. */
+export function heroFrom(entries: AchievementEntry[]): Character {
+  return characterFrom(entries, questBonusXp(entries));
+}
+
+// ---------- Bestiary ----------
+
+export interface BestiaryEntry {
+  name: string;
+  kind: MonsterKind;
+  elite: boolean;
+  /** Where it lurks, e.g. "Leg exercises". */
+  habitat: string;
+  kills: number;
+}
+
+const HABITATS: Record<keyof typeof FAMILIES, string> = {
+  push: 'Chest, shoulders & triceps',
+  pull: 'Back, biceps & other',
+  legs: 'Leg exercises',
+  core: 'Core, plyo & Olympic lifts',
+  cardio: 'Cardio',
+  mobility: 'Stretching',
+};
+
+/** Every monster there is, in the order the bestiary lists them. */
+export function bestiaryCatalog(): Omit<BestiaryEntry, 'kills'>[] {
+  const list: Omit<BestiaryEntry, 'kills'>[] = [{ name: 'Warm-up Slime', kind: 'slime', elite: false, habitat: 'Warm-up sets' }];
+  for (const key of Object.keys(FAMILIES) as (keyof typeof FAMILIES)[]) {
+    const f = FAMILIES[key];
+    for (const name of f.names) list.push({ name, kind: f.kind, elite: false, habitat: HABITATS[key] });
+    list.push({ name: f.elite, kind: f.kind, elite: true, habitat: `Last set · ${HABITATS[key]}` });
+  }
+  list.push({ name: 'Dragon of Failure', kind: 'dragon', elite: false, habitat: 'Sets to failure' });
+  list.push({ name: 'Record Keeper', kind: 'wraith', elite: false, habitat: 'Personal record attempts' });
+  return list;
+}
+
+function mergeRecords(a: Records | null, b: Records): Records {
+  if (!a) return b;
+  return Object.fromEntries(Object.keys(b).map((k) => [k, Math.max(a[k as keyof Records], b[k as keyof Records])])) as unknown as Records;
+}
+
+/**
+ * How many of each monster the history's sets slew. Entries must be in workout order (as
+ * getStatEntries returns them); records count from earlier workouts only, as in the dungeon.
+ */
+export function bestiaryFrom(entries: AchievementEntry[]): BestiaryEntry[] {
+  const groups = new Map<number, AchievementEntry[]>();
+  for (const e of entries) {
+    const g = groups.get(e.workoutExerciseId);
+    if (g) g.push(e);
+    else groups.set(e.workoutExerciseId, [e]);
+  }
+  const kills = new Map<string, number>();
+  const records = new Map<number, Records>();
+  let workoutId: number | null = null;
+  let pending: [number, Records][] = [];
+  for (const g of groups.values()) {
+    const first = g[0];
+    if (first.workoutId !== workoutId) {
+      for (const [id, r] of pending) records.set(id, mergeRecords(records.get(id) ?? null, r));
+      pending = [];
+      workoutId = first.workoutId;
+    }
+    const sets = g.map((e) => e.set);
+    const before = records.get(first.exerciseId) ?? null;
+    sets.forEach((_, i) => {
+      const m = monsterFor(first, sets, i, [], before);
+      kills.set(m.name, (kills.get(m.name) ?? 0) + 1);
+    });
+    pending.push([first.exerciseId, computeRecords(first.type, sets)]);
+  }
+  return bestiaryCatalog().map((m) => ({ ...m, kills: kills.get(m.name) ?? 0 }));
 }
