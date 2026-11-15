@@ -326,8 +326,8 @@ describe('boss fights', () => {
     const old = [3, 5, 7].map((d) => single(at(2025, 3, d), 3, SQUAT, 150));
     const recent = single(at(2025, 5, 20), 1, BENCH, 100);
     assert.equal(computeProgress([...old, recent], at(2025, 6, 10)).boss!.exerciseId, 1);
-    // With nothing in the window at all, any lift with a baseline still qualifies.
-    assert.equal(computeProgress(old, at(2025, 6, 10)).boss!.exerciseId, 3);
+    // With nothing in the window at all (a long break), there is no boss.
+    assert.equal(computeProgress(old, at(2025, 6, 10)).boss, null);
   });
 
   test('the first workout to reach the target defeats the boss, once', () => {

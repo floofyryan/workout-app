@@ -415,8 +415,11 @@ describe('hero progression', () => {
       );
 
       const progress = computeProgress(list, 2_000_000_001);
-      // 2 sets + a 60 s plank + the workout bonus
-      assert.equal(progress.rewards.get(first)?.total, 20 + 10 + 50);
+      // 2 sets + a 60 s plank + the workout bonus, plus whatever bonuses the day brought
+      const reward = progress.rewards.get(first)!;
+      const bonusXp = reward.bonuses.reduce((n, x) => n + x.xp, 0);
+      assert.equal(reward.total - bonusXp, 20 + 10 + 50);
+      assert.equal(reward.bonuses.find((x) => x.label === 'Rested muscles')?.xp, 3);
       assert.equal(progress.rewards.get(second)?.records, 1);
       assert.equal(progress.stats.might.xp, 20 + 20 + 25);
       assert.equal(progress.stats.fortitude.xp, 20);

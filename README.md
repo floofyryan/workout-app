@@ -58,9 +58,24 @@ in SQLite.
     exercises behind them, shown on a hexagon chart.
   - **Weekly quests** – train 3 times, beat a record, train 4 different stats; each pays bonus XP
     and resets on Monday.
-  - **Achievements** for workouts, streaks, records, total weight lifted and quests.
-  - Finishing a workout shows what it earned, with a level-up banner when you cross a level; the
-    live workout counts XP as you tick sets off.
+  - **Daily quest** – one small rotating task a day (10 sets, train your weakest stat, stretch,
+    10 minutes of cardio) for 30 XP.
+  - **Boss of the month** – one of your regular lifts, with a target 2.5 % above your best
+    estimated 1RM; beat it within the month for 200 XP.
+  - **Streak tokens** – every 4 weeks of streak earns a token (2 at most) that saves the streak
+    through one missed week.
+  - **Recovery** – each stat shows as fatigued, recovering or rested; muscles rested 48 hours earn
+    10 % more set XP.
+  - **Skill tree** – squat, bench, deadlift, overhead press and row are ranked Bronze to Diamond by
+    estimated 1RM against your body weight (log it in Measure); pull-ups by reps.
+  - **Titles and colours** – tap your name to rename the hero, wear the title of any achievement
+    you've unlocked and pick an accent colour from the ranks you've reached.
+  - **Reminders** – optional notifications when a streak is about to lapse, a weekly quest is one
+    workout away, or the boss is about to escape (Settings).
+  - **Achievements** for workouts, streaks, records, total weight lifted, quests and bosses.
+  - Finishing a workout shows what it earned, with a full-screen level-up moment (and a share
+    button) when you cross a level; the live workout counts XP as you tick sets off, and History
+    shows the XP each workout earned.
   - Nothing is stored: the hero is replayed from your history (`src/lib/rpg.ts`), so imported,
     edited and restored workouts all count.
   - The same tab keeps the training log: workouts total, this week, week streak, workouts-per-week

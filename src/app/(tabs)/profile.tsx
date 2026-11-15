@@ -12,7 +12,7 @@ import { WorkoutCard } from '@/components/WorkoutCard';
 import { listWorkouts, workoutCount, workoutStartTimes } from '@/db/repo';
 import { formatShortDate, startOfDay, startOfWeek } from '@/lib/format';
 import { useFocusQuery, useNow, useProgress } from '@/lib/hooks';
-import { QUESTS, RANKS, XP } from '@/lib/rpg';
+import { BOSS, QUESTS, RANKS, RECOVERY, STREAK_TOKENS, XP } from '@/lib/rpg';
 import { colors, radius, spacing } from '@/lib/theme';
 import { useSettings } from '@/state/SettingsContext';
 
@@ -106,7 +106,7 @@ export default function ProfileScreen() {
         <Stat label="Workouts" value={String(data?.total ?? 0)} />
         <Stat label="This week" value={String(stats.thisWeek)} />
         <Stat label="Week streak" value={String(stats.streak)} />
-        <Stat label="Records beaten" value={String(progress?.records ?? 0)} />
+        <Stat label="Records" value={String(progress?.records ?? 0)} />
       </Card>
 
       {progress && (
@@ -176,7 +176,11 @@ const RULES = [
   `Every set you finish earns ${XP.set} XP (${XP.warmupSet} for warm-ups). Holds and stretches earn 1 XP per ${XP.holdSecondsPerXp} seconds, cardio ${XP.cardioPerMinute} XP per minute.`,
   `Finishing a workout adds ${XP.workout} XP, and every exercise where you beat a personal record ${XP.record} XP.`,
   `Each week in a row you train adds ${XP.streakStep * 100}% to your set XP, up to ${XP.streakStep * XP.streakMaxSteps * 100}%.`,
-  `Weekly quests pay ${QUESTS.map((q) => q.reward).join(', ')} XP.`,
+  `Muscles that have rested ${RECOVERY.restedHours} hours earn ${XP.restedStep * 100}% more set XP.`,
+  `Weekly quests pay ${QUESTS.map((q) => q.reward).join(', ')} XP, and the daily quest ${XP.daily} XP.`,
+  `Each month one of your regular lifts is the boss: beat your best est. 1RM by ${BOSS.step * 100}% for ${XP.boss} XP.`,
+  `Every ${STREAK_TOKENS.everyWeeks} weeks of streak earns a token (up to ${STREAK_TOKENS.max}); a token saves your streak through one missed week.`,
+  'The skill tree ranks your main lifts by strength against your body weight. It pays no XP; it shows how strong you are.',
   'Set and record XP also levels the stat behind the exercise, and your strongest stat decides your class.',
   `Ranks: ${RANKS.map((r) => `${r.letter} at level ${r.minLevel}`).join(', ')}.`,
   'Everything is worked out from your history, so imported and edited workouts count too.',

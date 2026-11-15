@@ -506,6 +506,8 @@ function pickBoss(
     const type = types.get(exerciseId);
     if (!type || !isLift(type) || records.e1rm <= 0) continue;
     const count = seen.get(exerciseId) ?? 0;
+    // No boss after a long break: it has to be a lift you are actually training.
+    if (count === 0) continue;
     if (!pick || count > pick.count || (count === pick.count && exerciseId < pick.exerciseId)) {
       pick = { exerciseId, count, e1rm: records.e1rm };
     }
