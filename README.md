@@ -11,6 +11,15 @@ in SQLite.
   **Workout templates** and **Stretch routines** (two starter stretch routines included); cards show
   their exercises and when they were last performed; duplicate, edit or delete them, group them into
   **folders** (e.g. "PPL", "Mobility") and drag them into any order.
+- **Weekly plan** – schedule templates on the days you train (Workout tab → Plan). The Workout tab
+  shows "This week" with a day strip (done / missed / upcoming, plus unplanned extras) and a one-tap
+  start for today's workout. Doing a planned workout on another day still ticks it off; days from
+  before the plan was set up don't count as missed. Copy a day to another, or clear the plan.
+- **Program generator** – tick the equipment you have (presets for full gym, home gym, dumbbells,
+  bodyweight), your training days and goal (strength, muscle, general fitness), and it builds a
+  full-body, upper/lower or push/pull/legs program from the curated exercise library, with sets,
+  reps and rest times. Shuffle for different exercises, then save it as templates in a folder and,
+  optionally, as your weekly plan.
 - **Live workout** – elapsed timer, editable name and notes, and per exercise a
   `SET | PREVIOUS | KG | REPS | ✓` grid:
   - "Previous" shows what you did last time; tap it to copy those values. Ticking a set with blank
@@ -91,6 +100,7 @@ src/app/            Expo Router screens (files are routes)
   active-workout    Live workout screen
   workout/[id]      Workout details / summary, workout-edit/[id] to edit
   template/[id]     Template editor ("new" to create)
+  plan, generate    Weekly plan editor and program generator
   exercise/[id]     Exercise About / History / Charts / Records
 src/components/     Shared UI (WorkoutEditor set grid, charts, sheets, inputs)
 src/db/             SQLite schema/migrations (schema.ts), queries (repo.ts), test database (testDb.ts)

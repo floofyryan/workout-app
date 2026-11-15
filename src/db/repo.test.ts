@@ -2,12 +2,16 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
+import { generateProgram } from '../lib/generator';
 import type { SetData } from '../lib/types';
 import {
   addMeasurement,
+  deleteTemplate,
   duplicateTemplate,
   exportBackup,
   findExerciseByName,
+  getPlan,
+  getPlanStart,
   getPreviousSets,
   getRecordsBefore,
   getSettings,
@@ -21,11 +25,14 @@ import {
   listWorkouts,
   reorderTemplates,
   restoreBackup,
+  savePlan,
+  saveGeneratedProgram,
   saveSettings,
   saveTemplate,
   saveWorkout,
   setTemplateFolder,
   workoutCount,
+  workoutsBetween,
 } from './repo';
 import { migrateDb, SCHEMA_VERSION } from './schema';
 import { openTestDb } from './testDb';
@@ -307,6 +314,61 @@ describe('templates', () => {
         (await listTemplates(db)).map((t) => t.id),
         reversed,
       );
+    }));
+});
+
+describe('weekly plan', () => {
+  test('saves the plan in day order, drops deleted templates and survives a backup', () =>
+    withDb(async (db) => {
+      const [a, b, c] = await listTemplates(db);
+      await savePlan(db, [
+        { weekday: 4, templateId: c.id },
+        { weekday: 0, templateId: b.id },
+        { weekday: 0, templateId: a.id },
+        { weekday: 9, templateId: a.id },
+      ]);
+      const start = await getPlanStart(db);
+      assert.ok(start && start <= Date.now());
+      assert.deepEqual(await getPlan(db), [
+        { weekday: 0, templateId: b.id },
+        { weekday: 0, templateId: a.id },
+        { weekday: 4, templateId: c.id },
+      ]);
+
+      await deleteTemplate(db, b.id);
+      const plan = await getPlan(db);
+      assert.deepEqual(plan.map((p) => p.templateId), [a.id, c.id]);
+
+      const backup = await exportBackup(db);
+      await withDb(async (other) => {
+        await restoreBackup(other, backup);
+        assert.deepEqual(await getPlan(other), plan);
+      });
+    }));
+
+  test('a generated program is saved as templates and becomes the plan', () =>
+    withDb(async (db) => {
+      const program = generateProgram(
+        { gear: ['Dumbbell', 'Bench'], split: 'ppl', goal: 'muscle', weekdays: [0, 1, 2, 3, 4, 5], seed: 0 },
+        await listExercises(db),
+      );
+      const ids = await saveGeneratedProgram(db, program, { folder: 'PPL (generated)', replacePlan: true });
+      assert.equal(ids.length, 3);
+      const push = await getTemplate(db, ids[0]);
+      assert.equal(push?.name, 'Push');
+      assert.equal(push?.folder, 'PPL (generated)');
+      assert.equal(push?.exercises.length, program.workouts[0].exercises.length);
+      assert.ok(!('name' in (push?.exercises[0] ?? {})));
+      assert.deepEqual((await getPlan(db)).map((p) => p.templateId), [...ids, ...ids]);
+    }));
+
+  test('workoutsBetween returns start times and templates in a range', () =>
+    withDb(async (db) => {
+      const [t] = await listTemplates(db);
+      for (const startedAt of [1_000, 2_000, 3_000]) {
+        await saveWorkout(db, null, { name: 'W', notes: '', startedAt, endedAt: startedAt + 1, templateId: t.id, exercises: [] });
+      }
+      assert.deepEqual(await workoutsBetween(db, 1_500, 3_000), [{ startedAt: 2_000, templateId: t.id }]);
     }));
 });
 
