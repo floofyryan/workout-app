@@ -303,6 +303,7 @@ export function RewardCard({ reward, celebrate }: { reward: WorkoutReward; celeb
     ['Workout complete', reward.workoutXp],
     [`${reward.streakWeeks}-week streak`, reward.streakXp],
     ...reward.quests.map((q): [string, number] => [`Quest: ${q.title}`, q.reward]),
+    ...reward.bonuses.map((b): [string, number] => [b.label, b.xp]),
   ];
   return (
     <Card style={[styles.reward, celebrate && leveledUp && { borderColor: colors.xp, borderWidth: 1 }]}>

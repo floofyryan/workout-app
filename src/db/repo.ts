@@ -144,6 +144,9 @@ export const DEFAULT_SETTINGS: Settings = {
   timerNotifications: true,
   bodyMapFigure: 'goblin',
   heroName: '',
+  heroTitle: null,
+  heroAccent: null,
+  heroNotifications: true,
 };
 
 export const DEFAULT_IMPERIAL_PLATES = [45, 35, 25, 10, 5, 2.5];

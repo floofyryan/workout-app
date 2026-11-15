@@ -181,6 +181,12 @@ export interface Settings {
   bodyMapFigure: 'goblin' | 'male' | 'female';
   /** What the hero is called on the character sheet (empty = "Hero"). */
   heroName: string;
+  /** Id of the achievement whose title is shown next to the hero's name (null = none). */
+  heroTitle: string | null;
+  /** Letter of the rank whose colour accents the hero card (null = the default gold). */
+  heroAccent: string | null;
+  /** Remind about a streak that is about to lapse and quests that are nearly done. */
+  heroNotifications: boolean;
 }
 
 export const MEASUREMENT_TYPES = [

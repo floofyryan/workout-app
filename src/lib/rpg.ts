@@ -289,6 +289,12 @@ export interface WorkoutReward {
   streakXp: number;
   quests: { id: QuestId; title: string; reward: number }[];
   questXp: number;
+  /** Other bonuses (boss defeated, daily quest, rested muscles…), already included in `total`. */
+  bonuses: { label: string; xp: number }[];
+  /** A streak token was spent to bridge the missed week before this workout. */
+  tokenUsed: boolean;
+  /** This workout's week earned a streak token. */
+  tokenEarned: boolean;
   total: number;
   xpBefore: number;
   xpAfter: number;
@@ -298,7 +304,47 @@ export interface WorkoutReward {
   stats: { stat: Stat; xp: number; levelBefore: number; levelAfter: number }[];
 }
 
+/** This month's boss: beat `targetE1rm` (kg) on one lift for a big payout. */
+export interface BossStatus {
+  exerciseId: number;
+  /** Start of the boss's calendar month (local time). */
+  month: number;
+  /** Est. 1RM to beat, in kg. */
+  targetE1rm: number;
+  /** Best est. 1RM before the month started, in kg. */
+  baselineE1rm: number;
+  /** Best est. 1RM so far this month, in kg (0 if the lift hasn't been trained this month). */
+  bestE1rm: number;
+  reward: number;
+  defeated: boolean;
+}
+
+/** Today's small quest. */
+export interface DailyQuest {
+  id: string;
+  title: string;
+  description: string;
+  reward: number;
+  progress: number;
+  target: number;
+  done: boolean;
+  /** The stat the quest is about, if any. */
+  stat: Stat | null;
+}
+
+export type RecoveryState = 'fatigued' | 'recovering' | 'rested';
+
 export interface Progress {
+  /** This month's boss, or null when there isn't enough lifting history to pick one. */
+  boss: BossStatus | null;
+  bossesDefeated: number;
+  daily: DailyQuest;
+  /** Streak tokens held now; one saves the streak through a missed week. */
+  streakTokens: number;
+  /** How recovered the muscles behind each stat are. */
+  recovery: Record<Stat, { lastTrainedAt: number | null; state: RecoveryState }>;
+  /** Total XP after each workout, oldest first. */
+  timeline: { at: number; xp: number }[];
   xp: number;
   level: LevelInfo;
   rank: Rank;
@@ -405,6 +451,9 @@ export function computeProgress(workouts: ProgressWorkout[], now: number): Progr
       stats.push({ stat, xp: Math.round(gained[stat]), levelBefore, levelAfter: statLevel(statXp[stat]).level });
     }
     rewards.set(w.id, {
+      bonuses: [],
+      tokenUsed: false,
+      tokenEarned: false,
       setXp: setTotal,
       records: workoutRecords,
       recordXp,
@@ -438,6 +487,12 @@ export function computeProgress(workouts: ProgressWorkout[], now: number): Progr
   };
 
   return {
+    boss: null,
+    bossesDefeated: 0,
+    daily: { id: 'sets', title: 'Daily training', description: 'Finish 10 sets today', reward: 30, progress: 0, target: 10, done: false, stat: null },
+    streakTokens: 0,
+    recovery: Object.fromEntries(STATS.map((s) => [s, { lastTrainedAt: null, state: 'rested' }])) as Progress['recovery'],
+    timeline: [],
     xp,
     level,
     rank: rankFor(level.level),
