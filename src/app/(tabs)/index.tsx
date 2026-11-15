@@ -11,6 +11,7 @@ import { ReorderSheet } from '@/components/Sortable';
 import { Button, Card, SectionTitle } from '@/components/ui';
 import { deleteTemplate, duplicateTemplate, listTemplates, reorderTemplates, setTemplateFolder } from '@/db/repo';
 import { formatClock } from '@/lib/format';
+import { useHeroNotifications } from '@/lib/heroNotifications';
 import { useExerciseMap, useFocusQuery, useProgress } from '@/lib/hooks';
 import { colors, spacing } from '@/lib/theme';
 import type { Exercise, Template, TemplateKind } from '@/lib/types';
@@ -30,6 +31,7 @@ export default function StartWorkoutScreen() {
   const { workout, start } = useActiveWorkout();
   const { settings } = useSettings();
   const progress = useProgress();
+  useHeroNotifications(progress);
   const [templates, reload] = useFocusQuery(listTemplates);
   const [selected, setSelected] = useState<Template | null>(null);
   const [folderFor, setFolderFor] = useState<Template | null>(null);

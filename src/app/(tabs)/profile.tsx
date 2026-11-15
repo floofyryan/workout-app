@@ -4,7 +4,9 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BarChart } from '@/components/Charts';
 import { AchievementList, HeroCard, QuestList, StatRadar, StatRows } from '@/components/Hero';
-import { PromptModal } from '@/components/Sheets';
+import { HeroCustomizeSheet } from '@/components/HeroCustomize';
+import { BossCard, DailyQuestCard, RecoveryCard, StreakCard, XpChart } from '@/components/HeroExtras';
+import { SkillTree } from '@/components/SkillTree';
 import { Card, IconButton, ListItem, SectionTitle, Stat } from '@/components/ui';
 import { WorkoutCard } from '@/components/WorkoutCard';
 import { listWorkouts, workoutCount, workoutStartTimes } from '@/db/repo';
@@ -19,7 +21,7 @@ const WEEK_MS = 7 * 86_400_000;
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
-  const { settings, updateSettings } = useSettings();
+  const { settings } = useSettings();
   const progress = useProgress();
   const [renaming, setRenaming] = useState(false);
   const [showRules, setShowRules] = useState(false);
@@ -70,14 +72,32 @@ export default function ProfileScreen() {
         <>
           <HeroCard progress={progress} name={settings.heroName.trim() || 'Hero'} onRename={() => setRenaming(true)} />
 
+          <SectionTitle>Boss of the month</SectionTitle>
+          <BossCard progress={progress} now={now} />
+
+          <SectionTitle>Today&apos;s quest</SectionTitle>
+          <DailyQuestCard progress={progress} />
+
           <SectionTitle right={<Text style={styles.hint}>Resets Monday</Text>}>Weekly quests</SectionTitle>
           <QuestList quests={progress.quests} />
+
+          <SectionTitle>Streak</SectionTitle>
+          <StreakCard progress={progress} />
 
           <SectionTitle>Stats</SectionTitle>
           <Card>
             <StatRadar stats={progress.stats} />
             <StatRows stats={progress.stats} />
           </Card>
+
+          <SectionTitle>Recovery</SectionTitle>
+          <RecoveryCard progress={progress} now={now} />
+
+          <SectionTitle>Skill tree</SectionTitle>
+          <SkillTree />
+
+          <SectionTitle>XP history</SectionTitle>
+          <XpChart progress={progress} now={now} />
         </>
       )}
 
@@ -119,6 +139,7 @@ export default function ProfileScreen() {
           <SectionTitle>Last workout</SectionTitle>
           <WorkoutCard
             workout={data.recent[0]}
+            reward={progress?.rewards.get(data.recent[0].id)}
             units={settings.units}
             onPress={() => router.push({ pathname: '/workout/[id]', params: { id: String(data.recent[0].id) } })}
           />
@@ -146,14 +167,7 @@ export default function ProfileScreen() {
         <ListItem icon="calculator-outline" title="1RM calculator" onPress={() => router.push('/tools/one-rep-max')} />
         <ListItem icon="settings-outline" title="Settings, import & export" onPress={() => router.push('/settings')} />
       </View>
-      <PromptModal
-        visible={renaming}
-        title="Name your hero"
-        initialValue={settings.heroName}
-        placeholder="Hero"
-        onSubmit={(heroName) => updateSettings({ heroName: heroName.trim().slice(0, 24) })}
-        onClose={() => setRenaming(false)}
-      />
+      {progress && <HeroCustomizeSheet visible={renaming} onClose={() => setRenaming(false)} progress={progress} />}
     </ScrollView>
   );
 }
