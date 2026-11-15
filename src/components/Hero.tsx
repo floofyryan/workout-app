@@ -8,6 +8,7 @@ import {
   heroLevel,
   MAX_LEVEL,
   rankFor,
+  RANKS,
   STAT_INFO,
   STATS,
   type Achievement,
@@ -19,6 +20,7 @@ import {
   type WorkoutReward,
 } from '@/lib/rpg';
 import { colors, radius, spacing } from '@/lib/theme';
+import type { Settings, UnitSystem } from '@/lib/types';
 import { kgToDisplay, weightUnit } from '@/lib/units';
 import { useSettings } from '@/state/SettingsContext';
 import { Card } from './ui';
@@ -75,19 +77,47 @@ export function RankBadge({ rank, size = 44 }: { rank: Rank; size?: number }) {
 const xpToGo = (level: LevelInfo) =>
   level.span > 0 ? `${formatNumber(level.into)} / ${formatNumber(level.span)} XP` : `${formatNumber(level.xp)} XP · max level`;
 
+// ---------- Title & accent colour ----------
+
+/** The ranks the hero has reached so far, lowest first. */
+export const ranksReached = (progress: Progress): Rank[] => RANKS.filter((r) => progress.level.level >= r.minLevel);
+
+/** The equipped title: the chosen achievement, as long as it is (still) unlocked. */
+export function heroTitleFor(progress: Progress, settings: Pick<Settings, 'heroTitle'>): Achievement | null {
+  if (!settings.heroTitle) return null;
+  return progress.achievements.find((a) => a.id === settings.heroTitle && a.unlocked) ?? null;
+}
+
+/** The hero's accent colour: the chosen rank's colour if that rank has been reached, otherwise gold. */
+export function heroAccentFor(progress: Progress, settings: Pick<Settings, 'heroAccent'>): string {
+  if (!settings.heroAccent) return colors.xp;
+  return ranksReached(progress).find((r) => r.letter === settings.heroAccent)?.color ?? colors.xp;
+}
+
+/** An achievement's description with its goal filled in (weight goals are kept in kg and shown in the user's unit). */
+export function achievementDescription(a: Achievement, units: UnitSystem): string {
+  return a.description.replace('%s', `${formatNumber(Math.floor(a.weight ? kgToDisplay(a.goal, units) : a.goal))} ${weightUnit(units)}`);
+}
+
 // ---------- Hero summary ----------
 
 /** Compact level bar for the Workout tab: rank, level, XP and this week's quests at a glance. */
 export function HeroBar({ progress, name, onPress }: { progress: Progress; name: string; onPress?: () => void }) {
+  const { settings } = useSettings();
+  const title = heroTitleFor(progress, settings);
+  const accent = heroAccentFor(progress, settings);
   const questsDone = progress.quests.filter((q) => q.done).length;
   return (
     <Card onPress={onPress} style={styles.heroBar}>
       <RankBadge rank={progress.rank} />
       <View style={{ flex: 1, marginLeft: spacing.md }}>
         <View style={styles.rowBetween}>
-          <Text style={styles.heroBarName} numberOfLines={1}>
-            {name} <Text style={styles.heroBarLevel}>Lv {progress.level.level}</Text>
-          </Text>
+          <View style={[styles.row, { flex: 1, marginRight: spacing.sm }]}>
+            <Text style={styles.heroBarName} numberOfLines={1}>
+              {name}
+            </Text>
+            <Text style={[styles.heroBarLevel, { color: accent }]}> Lv {progress.level.level}</Text>
+          </View>
           <View style={styles.row}>
             {progress.streakWeeks > 1 && (
               <View style={[styles.row, { marginRight: spacing.sm }]}>
@@ -102,22 +132,40 @@ export function HeroBar({ progress, name, onPress }: { progress: Progress; name:
             </Text>
           </View>
         </View>
-        <XpBar progress={progress.level.progress} style={{ marginTop: 6 }} />
-        <Text style={styles.heroBarXp}>{xpToGo(progress.level)}</Text>
+        <XpBar progress={progress.level.progress} color={accent} style={{ marginTop: 6 }} />
+        <View style={styles.rowBetween}>
+          <Text style={styles.heroBarXp}>{xpToGo(progress.level)}</Text>
+          {title ? (
+            <Text style={[styles.heroBarTitle, { color: accent }]} numberOfLines={1}>
+              {title.title}
+            </Text>
+          ) : null}
+        </View>
       </View>
     </Card>
   );
 }
 
-/** The top of the character sheet. */
+/**
+ * The top of the character sheet. `onRename` is called when the name is tapped; it is meant to open
+ * the customize sheet (name, title, accent colour — see HeroCustomize.tsx).
+ */
 export function HeroCard({ progress, name, onRename }: { progress: Progress; name: string; onRename: () => void }) {
+  const { settings } = useSettings();
   const { level, rank } = progress;
+  const title = heroTitleFor(progress, settings);
+  const accent = heroAccentFor(progress, settings);
   return (
     <Card style={styles.heroCard}>
       <View style={{ flex: 1 }}>
-        <Text style={styles.heroName} numberOfLines={1} onPress={onRename} accessibilityHint="Rename your hero">
+        <Text style={styles.heroName} numberOfLines={1} onPress={onRename} accessibilityHint="Customize your hero">
           {name} <Ionicons name="pencil" size={13} color={colors.faint} />
         </Text>
+        {title ? (
+          <Text style={[styles.heroTitle, { color: accent }]} numberOfLines={1}>
+            {title.title}
+          </Text>
+        ) : null}
         <Text style={styles.heroClass}>
           {progress.heroClass.name} · <Text style={{ color: rank.color }}>{rank.title}</Text>
         </Text>
@@ -125,10 +173,10 @@ export function HeroCard({ progress, name, onRename }: { progress: Progress; nam
           <RankBadge rank={rank} size={48} />
           <View style={{ marginLeft: spacing.md }}>
             <Text style={styles.levelLabel}>LEVEL</Text>
-            <Text style={styles.levelValue}>{level.level}</Text>
+            <Text style={[styles.levelValue, { color: accent }]}>{level.level}</Text>
           </View>
         </View>
-        <XpBar progress={level.progress} height={10} style={{ marginTop: spacing.md }} />
+        <XpBar progress={level.progress} color={accent} height={10} style={{ marginTop: spacing.md }} />
         <Text style={styles.heroBarXp}>{xpToGo(level)}</Text>
         {progress.nextRank && level.level < MAX_LEVEL ? (
           <Text style={styles.nextRank}>
@@ -276,7 +324,7 @@ export function AchievementList({ achievements }: { achievements: Achievement[] 
               {a.title}
             </Text>
             <Text style={styles.achievementText} numberOfLines={2}>
-              {a.description.replace('%s', `${amount(a, a.goal)} ${weightUnit(settings.units)}`)}
+              {achievementDescription(a, settings.units)}
               {a.unlocked ? '' : ` · ${amount(a, a.value)}/${amount(a, a.goal)}`}
             </Text>
           </View>
@@ -354,6 +402,18 @@ export function RewardCard({ reward, celebrate }: { reward: WorkoutReward; celeb
             </View>
           ))}
       </View>
+      {reward.tokenUsed ? (
+        <View style={styles.tokenLine}>
+          <Ionicons name="shield-checkmark" size={14} color={colors.warning} />
+          <Text style={styles.tokenText}>Streak token used — streak saved</Text>
+        </View>
+      ) : null}
+      {reward.tokenEarned ? (
+        <View style={styles.tokenLine}>
+          <Ionicons name="shield" size={14} color={colors.xp} />
+          <Text style={styles.tokenText}>Streak token earned</Text>
+        </View>
+      ) : null}
       {reward.stats.length > 0 && (
         <View style={styles.statChips}>
           {reward.stats.map((s) => (
@@ -378,12 +438,22 @@ const styles = StyleSheet.create({
 
   heroBar: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, marginTop: spacing.sm },
   heroBarName: { color: colors.text, fontWeight: '700', fontSize: 15, flexShrink: 1 },
-  heroBarLevel: { color: colors.xp, fontWeight: '800' },
+  heroBarLevel: { color: colors.xp, fontWeight: '800', fontSize: 15 },
+  heroBarTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginTop: 4,
+    marginLeft: spacing.sm,
+    flexShrink: 1,
+  },
   heroBarMeta: { color: colors.muted, fontSize: 12, fontWeight: '600' },
   heroBarXp: { color: colors.faint, fontSize: 11, marginTop: 4, fontVariant: ['tabular-nums'] },
 
   heroCard: { flexDirection: 'row', alignItems: 'center' },
   heroName: { color: colors.text, fontSize: 22, fontWeight: '800' },
+  heroTitle: { fontSize: 11, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase', marginTop: 2 },
   heroClass: { color: colors.muted, fontSize: 14, fontWeight: '600', marginTop: 2 },
   levelLabel: { color: colors.faint, fontSize: 11, fontWeight: '800', letterSpacing: 1 },
   levelValue: { color: colors.xp, fontSize: 32, fontWeight: '900', lineHeight: 34 },
@@ -431,6 +501,8 @@ const styles = StyleSheet.create({
   rewardTotal: { color: colors.xp, fontSize: 18, fontWeight: '800' },
   rewardLevel: { color: colors.muted, fontSize: 13, fontWeight: '700' },
   rewardLine: { color: colors.muted, fontSize: 13, fontVariant: ['tabular-nums'] },
+  tokenLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.sm },
+  tokenText: { color: colors.muted, fontSize: 13, fontWeight: '600' },
   statChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: spacing.sm },
   statChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   statChipText: { fontSize: 12, fontWeight: '700' },

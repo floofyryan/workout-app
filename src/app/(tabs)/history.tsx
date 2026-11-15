@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui';
 import { WorkoutCard } from '@/components/WorkoutCard';
 import { listWorkouts } from '@/db/repo';
 import { formatMonth } from '@/lib/format';
+import { useProgress } from '@/lib/hooks';
 import { colors, spacing } from '@/lib/theme';
 import type { WorkoutDetail } from '@/lib/types';
 import { useSettings } from '@/state/SettingsContext';
@@ -19,6 +20,8 @@ export default function HistoryScreen() {
   const [workouts, setWorkouts] = useState<WorkoutDetail[] | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  // What each workout earned, recomputed whenever the tab is focused.
+  const rewards = useProgress()?.rewards;
 
   // Reload the first page (keeping the number already loaded) whenever the tab is focused.
   useFocusEffect(
@@ -71,6 +74,7 @@ export default function HistoryScreen() {
         <WorkoutCard
           workout={item}
           units={settings.units}
+          reward={rewards?.get(item.id)}
           onPress={() => router.push({ pathname: '/workout/[id]', params: { id: String(item.id) } })}
         />
       )}

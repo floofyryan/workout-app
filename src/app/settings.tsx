@@ -146,6 +146,10 @@ export default function SettingsScreen() {
           <Text style={[styles.text, { flex: 1, marginRight: spacing.md }]}>Timer alerts when the screen is off</Text>
           <Switch value={settings.timerNotifications} onValueChange={(v) => updateSettings({ timerNotifications: v })} />
         </View>
+        <View style={styles.switchRow}>
+          <Text style={[styles.text, { flex: 1, marginRight: spacing.md }]}>Quest and streak reminders</Text>
+          <Switch value={settings.heroNotifications} onValueChange={(v) => updateSettings({ heroNotifications: v })} />
+        </View>
       </Card>
 
       <SectionTitle>Plate calculator</SectionTitle>

@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { totalVolume } from '@/lib/calc';
 import { formatDate, formatDuration, formatNumber } from '@/lib/format';
 import { bestSet, formatSet } from '@/lib/setFormat';
+import type { WorkoutReward } from '@/lib/rpg';
 import { colors, spacing } from '@/lib/theme';
 import type { UnitSystem, WorkoutDetail } from '@/lib/types';
 import { kgToDisplay, weightUnit } from '@/lib/units';
@@ -19,17 +20,38 @@ export function WorkoutCard({
   units,
   onPress,
   onLongPress,
+  reward,
 }: {
   workout: WorkoutDetail;
   units: UnitSystem;
+  /** What the workout earned; adds "+N XP" and a level-up marker. */
+  reward?: WorkoutReward;
   onPress?: () => void;
   onLongPress?: () => void;
 }) {
   const volume = workoutVolume(workout);
   return (
     <Card style={styles.card} onPress={onPress} onLongPress={onLongPress}>
-      <Text style={styles.name}>{workout.name}</Text>
-      <Text style={styles.date}>{formatDate(workout.startedAt)}</Text>
+      <View style={styles.top}>
+        <Text style={[styles.name, { flex: 1 }]}>{workout.name}</Text>
+        {reward && reward.total > 0 ? (
+          <View style={styles.xp}>
+            <Ionicons name="flash" size={13} color={colors.xp} />
+            <Text style={styles.xpText}>+{formatNumber(reward.total)} XP</Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={styles.top}>
+        <Text style={[styles.date, { flex: 1 }]}>{formatDate(workout.startedAt)}</Text>
+        {reward && reward.levelAfter > reward.levelBefore ? (
+          <View style={styles.levelUp}>
+            <Ionicons name="arrow-up-circle" size={12} color={colors.xp} />
+            <Text style={styles.levelUpText}>
+              Level {reward.levelBefore} → {reward.levelAfter}
+            </Text>
+          </View>
+        ) : null}
+      </View>
       <View style={styles.stats}>
         <Stat icon="time-outline" text={formatDuration((workout.endedAt - workout.startedAt) / 1000)} />
         {volume > 0 && (
@@ -69,7 +91,22 @@ function Stat({ icon, text }: { icon: React.ComponentProps<typeof Ionicons>['nam
 
 const styles = StyleSheet.create({
   card: { marginBottom: spacing.md },
+  top: { flexDirection: 'row', alignItems: 'center' },
   name: { color: colors.text, fontSize: 17, fontWeight: '700' },
+  xp: { flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: spacing.sm },
+  xpText: { color: colors.xp, fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  levelUp: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: spacing.sm,
+    marginTop: 2,
+    backgroundColor: colors.xpDim,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  levelUpText: { color: colors.xp, fontSize: 11, fontWeight: '800' },
   date: { color: colors.muted, fontSize: 13, marginTop: 2 },
   stats: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.sm },
   stat: { flexDirection: 'row', alignItems: 'center', gap: 4 },

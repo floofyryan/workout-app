@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { RewardCard } from '@/components/Hero';
+import { LevelUpOverlay } from '@/components/LevelUpOverlay';
 import { ActionSheet } from '@/components/Sheets';
 import { supersetColors } from '@/components/WorkoutEditor';
 import { Card, IconButton, Stat } from '@/components/ui';
@@ -46,6 +47,7 @@ export default function WorkoutDetailScreen() {
   const { settings } = useSettings();
   const active = useActiveWorkout();
   const [menu, setMenu] = useState(false);
+  const [celebrated, setCelebrated] = useState(false);
   const [data] = useFocusQuery(
     async (db) => {
       const workout = await getWorkout(db, Number(id));
@@ -172,6 +174,15 @@ export default function WorkoutDetailScreen() {
         );
       })}
 
+      {data.reward ? (
+        <LevelUpOverlay
+          visible={leveledUp && !celebrated}
+          reward={data.reward}
+          heroName={settings.heroName.trim() || 'Hero'}
+          workoutName={w.name}
+          onClose={() => setCelebrated(true)}
+        />
+      ) : null}
       <ActionSheet
         visible={menu}
         onClose={() => setMenu(false)}

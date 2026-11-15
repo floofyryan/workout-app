@@ -4,7 +4,7 @@
 // imported workouts count, editing or deleting a workout keeps the numbers honest, and backups
 // carry the hero with them for free.
 import { computeRecords, newRecords, setVolume, type RecordKey, type Records } from './calc';
-import { startOfWeek } from './format';
+import { startOfDay, startOfWeek } from './format';
 import type { BodyPart, ExerciseType, SetData } from './types';
 
 // ---------- Stats ----------
@@ -77,7 +77,36 @@ export const XP = {
   /** Extra set XP per consecutive week trained before this one. */
   streakStep: 0.05,
   streakMaxSteps: 5,
+  /** Defeating the monthly boss. */
+  boss: 200,
+  /** Completing the daily quest. */
+  daily: 30,
+  /** Extra set XP for an exercise whose main stat has rested long enough. */
+  restedStep: 0.1,
 } as const;
+
+/** The monthly boss: beat your best est. 1RM on your most-trained lift by this much. */
+export const BOSS = {
+  /** Target = best est. 1RM before the month × (1 + step). */
+  step: 0.025,
+  /** The boss lift is the one trained in the most workouts over this many days before the month. */
+  lookbackDays: 60,
+} as const;
+
+/** Daily quest targets. */
+export const DAILY = {
+  sets: 10,
+  /** XP to earn in the weakest stat. */
+  statXp: 20,
+  stretchSets: 2,
+  cardioMinutes: 10,
+} as const;
+
+/** Streak tokens: one per `everyWeeks` weeks of streak, holding at most `max`; one bridges a single missed week. */
+export const STREAK_TOKENS = { everyWeeks: 4, max: 2 } as const;
+
+/** Hours since a stat was last trained: under `fatiguedHours` it is fatigued, from `restedHours` on it is rested. */
+export const RECOVERY = { fatiguedHours: 24, restedHours: 48 } as const;
 
 /** XP for one completed set. Sets with nothing logged earn nothing. */
 export function setXp(e: ExerciseKind, s: SetData): number {
@@ -216,9 +245,81 @@ function questStatuses(w: WeekState): QuestStatus[] {
   });
 }
 
+// ---------- Daily quest ----------
+
+const DAILY_KINDS = ['sets', 'weakest', 'mobility', 'cardio'] as const;
+type DailyKind = (typeof DAILY_KINDS)[number];
+
+interface DayState {
+  /** Start of the local day. */
+  day: number;
+  kind: DailyKind;
+  stat: Stat | null;
+  /** Raw progress in the quest's own unit (sets, XP or minutes). */
+  progress: number;
+  paid: boolean;
+}
+
+/** The stat with the least XP; ties go to the first in STATS order. */
+function weakestStat(statXp: Record<Stat, number>): Stat {
+  return STATS.reduce((a, b) => (statXp[b] < statXp[a] ? b : a));
+}
+
+/** The quest for the day containing `at`, given the stat XP at the start of that day. */
+function newDay(at: number, statXp: Record<Stat, number>): DayState {
+  const d = new Date(at);
+  // Counting calendar days (not elapsed time) keeps the rotation steady through DST shifts.
+  const index = Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY_MS);
+  const n = DAILY_KINDS.length;
+  const kind = DAILY_KINDS[((index % n) + n) % n];
+  const stat = kind === 'weakest' ? weakestStat(statXp) : kind === 'mobility' ? 'agility' : kind === 'cardio' ? 'stamina' : null;
+  return { day: startOfDay(at), kind, stat, progress: 0, paid: false };
+}
+
+function dailyTarget(kind: DailyKind): number {
+  if (kind === 'sets') return DAILY.sets;
+  if (kind === 'weakest') return DAILY.statXp;
+  if (kind === 'mobility') return DAILY.stretchSets;
+  return DAILY.cardioMinutes;
+}
+
+function dailyText(d: DayState): { title: string; description: string } {
+  if (d.kind === 'sets') return { title: 'Daily training', description: `Finish ${DAILY.sets} sets today` };
+  if (d.kind === 'weakest') {
+    return { title: 'Weak point', description: `Earn ${DAILY.statXp} ${STAT_INFO[d.stat ?? 'might'].name} XP today` };
+  }
+  if (d.kind === 'mobility') return { title: 'Limber up', description: `Complete ${DAILY.stretchSets} stretching sets today` };
+  return { title: 'Get moving', description: `Do ${DAILY.cardioMinutes} minutes of cardio today` };
+}
+
+const EPSILON = 1e-9;
+const dailyDone = (d: DayState) => d.progress >= dailyTarget(d.kind) - EPSILON;
+
+function dailyStatus(d: DayState): DailyQuest {
+  const target = dailyTarget(d.kind);
+  return {
+    id: d.kind,
+    ...dailyText(d),
+    reward: XP.daily,
+    progress: Math.min(target, Math.floor(d.progress + EPSILON)),
+    target,
+    done: dailyDone(d),
+    stat: d.stat,
+  };
+}
+
+/** Minutes of cardio in a set; distance-only sets count 5 min per km, matching the XP rates. */
+function cardioMinutes(s: SetData): number {
+  const duration = s.durationS ?? 0;
+  if (duration > 0) return duration / 60;
+  return (Math.max(0, s.distanceM ?? 0) / 1000) * (XP.cardioPerKm / XP.cardioPerMinute);
+}
+
 // ---------- Achievements ----------
 
 interface Totals {
+  bossesDefeated: number;
+  dailyDone: number;
   workouts: number;
   records: number;
   volumeKg: number;
@@ -256,6 +357,10 @@ const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'v4', title: 'Mountain Mover', description: 'Lift %s in total', icon: 'barbell', weight: true, goal: 1_000_000, value: (t) => t.volumeKg },
   { id: 'q10', title: 'Quest Taker', description: 'Complete 10 weekly quests', icon: 'ribbon', goal: 10, value: (t) => t.questsDone },
   { id: 'q50', title: 'Quest Master', description: 'Complete 50 weekly quests', icon: 'ribbon', goal: 50, value: (t) => t.questsDone },
+  { id: 'b1', title: 'Boss Slayer', description: 'Defeat a monthly boss', icon: 'trophy', goal: 1, value: (t) => t.bossesDefeated },
+  { id: 'b5', title: 'Boss Hunter', description: 'Defeat 5 monthly bosses', icon: 'trophy', goal: 5, value: (t) => t.bossesDefeated },
+  { id: 'd7', title: 'Daily Grind', description: 'Complete 7 daily quests', icon: 'star', goal: 7, value: (t) => t.dailyDone },
+  { id: 'd30', title: 'Creature of Habit', description: 'Complete 30 daily quests', icon: 'star', goal: 30, value: (t) => t.dailyDone },
   { id: 'all5', title: 'No Weak Points', description: 'Reach level 5 in every stat', icon: 'star', goal: 5, value: (t) => t.minStatLevel },
 ];
 
@@ -367,6 +472,62 @@ const DAY_MS = 86_400_000;
 /** The start of the week before `week`; stepping back half a week first survives DST shifts. */
 const previousWeek = (week: number) => startOfWeek(week - 3.5 * DAY_MS);
 
+const startOfMonth = (ts: number) => {
+  const d = new Date(ts);
+  return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+};
+
+const isLift = (type: ExerciseType) => type === 'weight_reps' || type === 'weighted_bodyweight';
+
+/** An exercise's main stat: its largest weight, ties going to the first in STATS order. */
+function primaryStat(e: ExerciseKind): Stat {
+  const weights = statWeights(e);
+  return STATS.reduce((a, b) => ((weights[b] ?? 0) > (weights[a] ?? 0) ? b : a));
+}
+
+/**
+ * Picks the boss for the month starting at `month` from the state just before it: the lift (with
+ * an est. 1RM on record) that appeared in the most workouts over the lookback window.
+ */
+function pickBoss(
+  month: number,
+  best: Map<number, Records>,
+  types: Map<number, ExerciseType>,
+  history: { at: number; exerciseIds: number[] }[],
+): BossStatus | null {
+  const from = month - BOSS.lookbackDays * DAY_MS;
+  const seen = new Map<number, number>();
+  for (let i = history.length - 1; i >= 0 && history[i].at >= from; i--) {
+    if (history[i].at >= month) continue;
+    for (const id of history[i].exerciseIds) seen.set(id, (seen.get(id) ?? 0) + 1);
+  }
+  let pick: { exerciseId: number; count: number; e1rm: number } | null = null;
+  for (const [exerciseId, records] of best) {
+    const type = types.get(exerciseId);
+    if (!type || !isLift(type) || records.e1rm <= 0) continue;
+    const count = seen.get(exerciseId) ?? 0;
+    if (!pick || count > pick.count || (count === pick.count && exerciseId < pick.exerciseId)) {
+      pick = { exerciseId, count, e1rm: records.e1rm };
+    }
+  }
+  if (!pick) return null;
+  return {
+    exerciseId: pick.exerciseId,
+    month,
+    targetE1rm: pick.e1rm * (1 + BOSS.step),
+    baselineE1rm: pick.e1rm,
+    bestE1rm: 0,
+    reward: XP.boss,
+    defeated: false,
+  };
+}
+
+function recoveryState(lastTrainedAt: number | null, now: number): RecoveryState {
+  if (lastTrainedAt == null) return 'rested';
+  const hours = (now - lastTrainedAt) / 3_600_000;
+  return hours < RECOVERY.fatiguedHours ? 'fatigued' : hours < RECOVERY.restedHours ? 'recovering' : 'rested';
+}
+
 /** Replays every workout (in any order) and returns the hero as of `now`. */
 export function computeProgress(workouts: ProgressWorkout[], now: number): Progress {
   const ordered = [...workouts].sort((a, b) => a.startedAt - b.startedAt || a.id - b.id);
@@ -380,36 +541,92 @@ export function computeProgress(workouts: ProgressWorkout[], now: number): Progr
   let streak = 0;
   let bestStreak = 0;
   let week: WeekState | null = null;
+  let tokens = 0;
+  let day: DayState | null = null;
+  let dailyCount = 0;
+  let boss: BossStatus | null = null;
+  let bossMonth: number | null = null;
+  let bossesDefeated = 0;
+  const types = new Map<number, ExerciseType>();
+  const history: { at: number; exerciseIds: number[] }[] = [];
+  const lastTrained = Object.fromEntries(STATS.map((s) => [s, null])) as Record<Stat, number | null>;
+  const timeline: Progress['timeline'] = [];
 
   for (const w of ordered) {
     const thisWeek = startOfWeek(w.startedAt);
+    let tokenUsed = false;
+    let tokenEarned = false;
     if (!week || week.week !== thisWeek) {
-      streak = week && week.week === previousWeek(thisWeek) ? streak + 1 : 1;
+      const lastWeek = previousWeek(thisWeek);
+      if (week && week.week === lastWeek) {
+        streak++;
+      } else if (week && tokens > 0 && week.week === previousWeek(lastWeek)) {
+        // Exactly one week missed: a token bridges it, and the missed week adds nothing.
+        tokens--;
+        tokenUsed = true;
+        streak++;
+      } else {
+        streak = 1;
+      }
+      if (streak % STREAK_TOKENS.everyWeeks === 0 && tokens < STREAK_TOKENS.max) {
+        tokens++;
+        tokenEarned = true;
+      }
       week = newWeek(thisWeek);
     }
     bestStreak = Math.max(bestStreak, streak);
+
+    // The boss and the daily quest are chosen from the state before this workout, which is the
+    // state at the start of the month/day since workouts are replayed in order.
+    const thisMonth = startOfMonth(w.startedAt);
+    if (bossMonth !== thisMonth) {
+      bossMonth = thisMonth;
+      boss = pickBoss(thisMonth, best, types, history);
+    }
+    if (!day || day.day !== startOfDay(w.startedAt)) day = newDay(w.startedAt, statXp);
 
     // Sets, grouped per exercise so that records compare against earlier workouts only.
     const gained = zeroStats();
     const byExercise = new Map<number, { kind: ExerciseKind; sets: SetData[] }>();
     let setTotal = 0;
+    let restedXp = 0;
+    let xpSets = 0;
+    let stretchSets = 0;
+    let cardio = 0;
     for (const e of w.exercises) {
       const entry = byExercise.get(e.exerciseId) ?? { kind: e, sets: [] };
       entry.sets.push(...e.sets);
       byExercise.set(e.exerciseId, entry);
       const weights = statWeights(e);
+      const trainedAt = lastTrained[primaryStat(e)];
+      const rested = trainedAt == null || w.startedAt - trainedAt >= RECOVERY.restedHours * 3_600_000;
       for (const s of e.sets) {
         const earned = setXp(e, s);
         setTotal += earned;
         volumeKg += setVolume(e.type, s);
         for (const stat of STATS) gained[stat] += earned * (weights[stat] ?? 0);
+        if (earned <= 0) continue;
+        xpSets++;
+        if (rested) restedXp += earned * XP.restedStep;
+        if (e.category === 'stretching') stretchSets++;
+        else if (isCardio(e)) cardio += cardioMinutes(s);
       }
     }
 
+    const bonuses: WorkoutReward['bonuses'] = [];
     let workoutRecords = 0;
     for (const [exerciseId, { kind, sets }] of byExercise) {
       const current = computeRecords(kind.type, sets);
       const previous = best.get(exerciseId) ?? null;
+      types.set(exerciseId, kind.type);
+      if (boss && boss.exerciseId === exerciseId) {
+        boss.bestE1rm = Math.max(boss.bestE1rm, current.e1rm);
+        if (!boss.defeated && current.e1rm >= boss.targetE1rm - EPSILON) {
+          boss.defeated = true;
+          bossesDefeated++;
+          bonuses.push({ label: 'Boss defeated', xp: XP.boss });
+        }
+      }
       // One heavier set usually beats several records at once (est. 1RM, weight, volume), so the
       // bonus is paid once per exercise.
       if (newRecords(kind.type, previous, current).length > 0) {
@@ -442,7 +659,25 @@ export function computeProgress(workouts: ProgressWorkout[], now: number): Progr
     questsDone += quests.length;
     records += workoutRecords;
 
-    const total = setTotal + recordXp + workoutXp + streakXp + questXp;
+    // Daily quest: progress adds up over the day's workouts and pays out once.
+    if (day.kind === 'sets') day.progress += xpSets;
+    else if (day.kind === 'weakest') day.progress += day.stat ? gained[day.stat] : 0;
+    else if (day.kind === 'mobility') day.progress += stretchSets;
+    else day.progress += cardio;
+    if (!day.paid && dailyDone(day)) {
+      day.paid = true;
+      dailyCount++;
+      bonuses.push({ label: `Daily quest: ${dailyText(day).title}`, xp: XP.daily });
+    }
+
+    // Rested bonus, judged against when each stat was trained before this workout.
+    const restedBonus = Math.round(restedXp);
+    if (restedBonus > 0) bonuses.push({ label: 'Rested muscles', xp: restedBonus });
+    for (const stat of STATS) if (gained[stat] >= TRAINED_STAT_XP) lastTrained[stat] = w.startedAt;
+    history.push({ at: w.startedAt, exerciseIds: [...byExercise.keys()] });
+
+    const bonusXp = bonuses.reduce((n, b) => n + b.xp, 0);
+    const total = setTotal + recordXp + workoutXp + streakXp + questXp + bonusXp;
     const stats: WorkoutReward['stats'] = [];
     for (const stat of STATS) {
       if (gained[stat] <= 0) continue;
@@ -451,9 +686,9 @@ export function computeProgress(workouts: ProgressWorkout[], now: number): Progr
       stats.push({ stat, xp: Math.round(gained[stat]), levelBefore, levelAfter: statLevel(statXp[stat]).level });
     }
     rewards.set(w.id, {
-      bonuses: [],
-      tokenUsed: false,
-      tokenEarned: false,
+      bonuses,
+      tokenUsed,
+      tokenEarned,
       setXp: setTotal,
       records: workoutRecords,
       recordXp,
@@ -470,14 +705,24 @@ export function computeProgress(workouts: ProgressWorkout[], now: number): Progr
       stats,
     });
     xp += total;
+    timeline.push({ at: w.startedAt, xp });
   }
 
-  // The streak survives into a new week until that week ends without a workout.
+  // The streak survives into a new week until that week ends without a workout, and one week
+  // longer with a token in hand (it is only spent when a workout actually uses it).
   const currentWeek = startOfWeek(now);
-  const alive = week != null && (week.week === currentWeek || week.week === previousWeek(currentWeek));
+  const lastWeek = previousWeek(currentWeek);
+  const alive =
+    week != null &&
+    (week.week === currentWeek || week.week === lastWeek || (tokens > 0 && week.week === previousWeek(lastWeek)));
+  const currentMonth = startOfMonth(now);
+  if (bossMonth !== currentMonth) boss = pickBoss(currentMonth, best, types, history);
+  if (!day || day.day !== startOfDay(now)) day = newDay(now, statXp);
   const stats = Object.fromEntries(STATS.map((s) => [s, statLevel(statXp[s])])) as Record<Stat, LevelInfo>;
   const level = heroLevel(xp);
   const totals: Totals = {
+    bossesDefeated,
+    dailyDone: dailyCount,
     workouts: [...rewards.values()].filter((r) => r.workoutXp > 0).length,
     records,
     volumeKg,
@@ -487,12 +732,14 @@ export function computeProgress(workouts: ProgressWorkout[], now: number): Progr
   };
 
   return {
-    boss: null,
-    bossesDefeated: 0,
-    daily: { id: 'sets', title: 'Daily training', description: 'Finish 10 sets today', reward: 30, progress: 0, target: 10, done: false, stat: null },
-    streakTokens: 0,
-    recovery: Object.fromEntries(STATS.map((s) => [s, { lastTrainedAt: null, state: 'rested' }])) as Progress['recovery'],
-    timeline: [],
+    boss,
+    bossesDefeated,
+    daily: dailyStatus(day),
+    streakTokens: tokens,
+    recovery: Object.fromEntries(
+      STATS.map((s) => [s, { lastTrainedAt: lastTrained[s], state: recoveryState(lastTrained[s], now) }]),
+    ) as Progress['recovery'],
+    timeline,
     xp,
     level,
     rank: rankFor(level.level),
