@@ -73,6 +73,14 @@ npm start          # scan the QR code with Expo Go
 npm run android    # or open in an Android emulator
 ```
 
+## Installing on your phone (Windows, one click)
+
+With Android Studio installed and your phone connected (USB debugging, or paired over Wi-Fi in
+Android Studio → Device Manager), double-click **`build-phone.bat`**. It pulls the latest code,
+installs packages, generates the Android project and installs a release build on the phone. The
+`plugins/withGradleMemory.js` config plugin gives Gradle enough memory for this, so the generated
+`android/` folder never needs editing.
+
 ## Building an APK
 
 Builds run in the cloud with EAS — no Android Studio needed:
