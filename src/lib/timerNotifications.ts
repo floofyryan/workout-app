@@ -25,8 +25,9 @@ export function setupTimerNotifications(): Promise<boolean> {
         await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
           name: 'Workout timers',
           importance: Notifications.AndroidImportance.HIGH,
+          // No `sound` here: Android treats a name as a bundled sound file, and the channel
+          // plays the system default without one.
           vibrationPattern: [0, 400, 200, 400],
-          sound: 'default',
         });
       }
       const current = await Notifications.getPermissionsAsync();
