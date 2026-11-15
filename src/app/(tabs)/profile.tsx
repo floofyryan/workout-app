@@ -1,13 +1,16 @@
 import { router, useNavigation } from 'expo-router';
-import { useLayoutEffect, useMemo } from 'react';
+import { useLayoutEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BarChart } from '@/components/Charts';
+import { AchievementList, HeroCard, QuestList, StatRadar, StatRows } from '@/components/Hero';
+import { PromptModal } from '@/components/Sheets';
 import { Card, IconButton, ListItem, SectionTitle, Stat } from '@/components/ui';
 import { WorkoutCard } from '@/components/WorkoutCard';
 import { listWorkouts, workoutCount, workoutStartTimes } from '@/db/repo';
 import { formatShortDate, startOfDay, startOfWeek } from '@/lib/format';
-import { useFocusQuery, useNow } from '@/lib/hooks';
+import { useFocusQuery, useNow, useProgress } from '@/lib/hooks';
+import { QUESTS, RANKS, XP } from '@/lib/rpg';
 import { colors, radius, spacing } from '@/lib/theme';
 import { useSettings } from '@/state/SettingsContext';
 
@@ -16,7 +19,10 @@ const WEEK_MS = 7 * 86_400_000;
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
+  const progress = useProgress();
+  const [renaming, setRenaming] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
@@ -60,11 +66,43 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
+      {progress && (
+        <>
+          <HeroCard progress={progress} name={settings.heroName.trim() || 'Hero'} onRename={() => setRenaming(true)} />
+
+          <SectionTitle right={<Text style={styles.hint}>Resets Monday</Text>}>Weekly quests</SectionTitle>
+          <QuestList quests={progress.quests} />
+
+          <SectionTitle>Stats</SectionTitle>
+          <Card>
+            <StatRadar stats={progress.stats} />
+            <StatRows stats={progress.stats} />
+          </Card>
+        </>
+      )}
+
+      <SectionTitle>Training log</SectionTitle>
       <Card style={{ flexDirection: 'row' }}>
         <Stat label="Workouts" value={String(data?.total ?? 0)} />
         <Stat label="This week" value={String(stats.thisWeek)} />
         <Stat label="Week streak" value={String(stats.streak)} />
+        <Stat label="Records beaten" value={String(progress?.records ?? 0)} />
       </Card>
+
+      {progress && (
+        <>
+          <SectionTitle
+            right={
+              <Text style={styles.hint}>
+                {progress.achievements.filter((a) => a.unlocked).length}/{progress.achievements.length}
+              </Text>
+            }
+          >
+            Achievements
+          </SectionTitle>
+          <AchievementList achievements={progress.achievements} />
+        </>
+      )}
 
       <SectionTitle>Workouts per week</SectionTitle>
       <Card>
@@ -89,13 +127,46 @@ export default function ProfileScreen() {
 
       <SectionTitle>Tools</SectionTitle>
       <View style={styles.list}>
+        <ListItem
+          icon="flash-outline"
+          title="How leveling works"
+          onPress={() => setShowRules((v) => !v)}
+          right={<Text style={styles.hint}>{showRules ? 'Hide' : 'Show'}</Text>}
+        />
+        {showRules && (
+          <View style={styles.rules}>
+            {RULES.map((line) => (
+              <Text key={line} style={styles.rule}>
+                • {line}
+              </Text>
+            ))}
+          </View>
+        )}
         <ListItem icon="disc-outline" title="Plate calculator" onPress={() => router.push('/tools/plates')} />
         <ListItem icon="calculator-outline" title="1RM calculator" onPress={() => router.push('/tools/one-rep-max')} />
         <ListItem icon="settings-outline" title="Settings, import & export" onPress={() => router.push('/settings')} />
       </View>
+      <PromptModal
+        visible={renaming}
+        title="Name your hero"
+        initialValue={settings.heroName}
+        placeholder="Hero"
+        onSubmit={(heroName) => updateSettings({ heroName: heroName.trim().slice(0, 24) })}
+        onClose={() => setRenaming(false)}
+      />
     </ScrollView>
   );
 }
+
+const RULES = [
+  `Every set you finish earns ${XP.set} XP (${XP.warmupSet} for warm-ups). Holds and stretches earn 1 XP per ${XP.holdSecondsPerXp} seconds, cardio ${XP.cardioPerMinute} XP per minute.`,
+  `Finishing a workout adds ${XP.workout} XP, and every exercise where you beat a personal record ${XP.record} XP.`,
+  `Each week in a row you train adds ${XP.streakStep * 100}% to your set XP, up to ${XP.streakStep * XP.streakMaxSteps * 100}%.`,
+  `Weekly quests pay ${QUESTS.map((q) => q.reward).join(', ')} XP.`,
+  'Set and record XP also levels the stat behind the exercise, and your strongest stat decides your class.',
+  `Ranks: ${RANKS.map((r) => `${r.letter} at level ${r.minLevel}`).join(', ')}.`,
+  'Everything is worked out from your history, so imported and edited workouts count too.',
+];
 
 function monthName() {
   return new Date().toLocaleString(undefined, { month: 'long', year: 'numeric' });
@@ -146,6 +217,9 @@ function MonthCalendar({ days }: { days: Set<number> }) {
 const styles = StyleSheet.create({
   content: { padding: spacing.lg, paddingTop: 0, paddingBottom: 40 },
   list: { borderRadius: radius.lg, overflow: 'hidden' },
+  hint: { color: colors.faint, fontSize: 12, fontWeight: '600' },
+  rules: { backgroundColor: colors.card, padding: spacing.lg, gap: 6 },
+  rule: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   calRow: { flexDirection: 'row' },
   calCell: { flex: 1, alignItems: 'center', paddingVertical: 3 },
   calHead: { color: colors.faint, fontSize: 12, fontWeight: '700', textAlign: 'center' },

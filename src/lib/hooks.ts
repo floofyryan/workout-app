@@ -2,7 +2,8 @@ import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext, type SQLiteDatabase } from 'expo-sqlite';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { getExercisesByIds } from '@/db/repo';
+import { getExercisesByIds, listProgressWorkouts } from '@/db/repo';
+import { computeProgress, type Progress } from './rpg';
 import type { Exercise } from './types';
 
 /**
@@ -62,4 +63,10 @@ export function useNow(intervalMs = 1000): number {
     return () => clearInterval(t);
   }, [intervalMs]);
   return now;
+}
+
+/** The hero's level, stats, quests and per-workout rewards, recomputed whenever the screen is focused. */
+export function useProgress(): Progress | undefined {
+  const [progress] = useFocusQuery(async (db) => computeProgress(await listProgressWorkouts(db), Date.now()));
+  return progress;
 }

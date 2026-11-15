@@ -5,15 +5,17 @@ import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import Ionicons from '@expo/vector-icons/Ionicons';
 
+import { HeroBar } from '@/components/Hero';
 import { ActionSheet, PromptModal } from '@/components/Sheets';
 import { ReorderSheet } from '@/components/Sortable';
 import { Button, Card, SectionTitle } from '@/components/ui';
 import { deleteTemplate, duplicateTemplate, listTemplates, reorderTemplates, setTemplateFolder } from '@/db/repo';
 import { formatClock } from '@/lib/format';
-import { useExerciseMap, useFocusQuery } from '@/lib/hooks';
+import { useExerciseMap, useFocusQuery, useProgress } from '@/lib/hooks';
 import { colors, spacing } from '@/lib/theme';
 import type { Exercise, Template, TemplateKind } from '@/lib/types';
 import { useActiveWorkout } from '@/state/ActiveWorkoutContext';
+import { useSettings } from '@/state/SettingsContext';
 
 function daysAgo(ts: number | null): string {
   if (!ts) return 'Never performed';
@@ -26,6 +28,8 @@ function daysAgo(ts: number | null): string {
 export default function StartWorkoutScreen() {
   const db = useSQLiteContext();
   const { workout, start } = useActiveWorkout();
+  const { settings } = useSettings();
+  const progress = useProgress();
   const [templates, reload] = useFocusQuery(listTemplates);
   const [selected, setSelected] = useState<Template | null>(null);
   const [folderFor, setFolderFor] = useState<Template | null>(null);
@@ -53,6 +57,9 @@ export default function StartWorkoutScreen() {
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.container}>
+      {progress && (
+        <HeroBar progress={progress} name={settings.heroName.trim() || 'Hero'} onPress={() => router.navigate('/profile')} />
+      )}
       <SectionTitle>Quick start</SectionTitle>
       <Button title={workout ? 'Resume Workout' : 'Start an Empty Workout'} onPress={() => (workout ? router.push('/active-workout') : begin())} />
 

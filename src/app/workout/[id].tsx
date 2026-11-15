@@ -1,17 +1,20 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import * as Haptics from 'expo-haptics';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { RewardCard } from '@/components/Hero';
 import { ActionSheet } from '@/components/Sheets';
 import { supersetColors } from '@/components/WorkoutEditor';
 import { Card, IconButton, Stat } from '@/components/ui';
 import { workoutVolume } from '@/components/WorkoutCard';
-import { deleteWorkout, getRecordsBefore, getWorkout, saveTemplate } from '@/db/repo';
+import { deleteWorkout, getRecordsBefore, getWorkout, listProgressWorkouts, saveTemplate } from '@/db/repo';
 import { computeRecords, estimate1RM, newRecords, RECORD_LABELS, type RecordKey } from '@/lib/calc';
 import { formatDate, formatDuration, formatNumber, formatTime } from '@/lib/format';
 import { useFocusQuery } from '@/lib/hooks';
+import { computeProgress } from '@/lib/rpg';
 import { formatSet, SET_TYPE_LABEL } from '@/lib/setFormat';
 import { colors, radius, spacing } from '@/lib/theme';
 import { exerciseCategory, type Template, type WorkoutDetail } from '@/lib/types';
@@ -53,12 +56,19 @@ export default function WorkoutDetailScreen() {
           prs.set(e.id, newRecords(e.exercise.type, before, computeRecords(e.exercise.type, e.sets)));
         }
       }
-      return { workout, prs };
+      const reward = workout ? computeProgress(await listProgressWorkouts(db), Date.now()).rewards.get(workout.id) : undefined;
+      return { workout, prs, reward };
     },
     [id],
   );
   const w = data?.workout;
   const units = settings.units;
+
+  // Leveling up right after a workout deserves a buzz.
+  const leveledUp = !!summary && !!data?.reward && data.reward.levelAfter > data.reward.levelBefore;
+  useEffect(() => {
+    if (leveledUp) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  }, [leveledUp]);
 
   if (data && !w) {
     return (
@@ -100,7 +110,7 @@ export default function WorkoutDetailScreen() {
         <View style={styles.banner}>
           <Ionicons name="trophy" size={28} color={colors.warning} />
           <View style={{ marginLeft: spacing.md, flex: 1 }}>
-            <Text style={styles.bannerTitle}>Nice work!</Text>
+            <Text style={styles.bannerTitle}>Training complete!</Text>
             <Text style={styles.bannerText}>
               {totalPrs > 0 ? `You set ${totalPrs} personal record${totalPrs === 1 ? '' : 's'}.` : 'Workout saved.'}
             </Text>
@@ -118,6 +128,7 @@ export default function WorkoutDetailScreen() {
         <Stat label={`Volume (${weightUnit(units)})`} value={formatNumber(kgToDisplay(volume, units))} />
         <Stat label="PRs" value={String(totalPrs)} />
       </Card>
+      {data.reward && data.reward.total > 0 ? <RewardCard reward={data.reward} celebrate={!!summary} /> : null}
 
       {w.exercises.map((e, index) => {
         const prs = data.prs.get(e.id) ?? [];

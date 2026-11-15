@@ -46,7 +46,25 @@ in SQLite.
   variants track the added or assisting weight.
 - **Personal records** – est. 1RM, heaviest weight, best set volume, most reps, longest
   duration/distance, highlighted when a workout beats them.
-- **Profile** – workouts total, this week, week streak, workouts-per-week chart, training calendar.
+- **Hero** – the app treats your training like levelling a game character:
+  - **XP and levels** – every finished set earns XP (10 per set, 3 for warm-ups; holds and
+    stretches by time, cardio by the minute), plus 50 for finishing the workout, 25 for each
+    exercise where you beat a personal record, and up to +25 % for training week after week. Level 2
+    takes 100 XP and each level takes 100 more than the last, up to level 99.
+  - **Ranks and class** – E (Rookie) through SSS (Mythic) as you level; your class (Vanguard,
+    Ranger, Juggernaut, Guardian, Pathfinder, Monk or Paragon) follows the stat you train most.
+  - **Six stats** – Might (chest, shoulders, triceps), Grip (back, biceps, forearms), Drive (legs),
+    Fortitude (core, neck), Stamina (cardio, plyometrics) and Agility (stretching) level up from the
+    exercises behind them, shown on a hexagon chart.
+  - **Weekly quests** – train 3 times, beat a record, train 4 different stats; each pays bonus XP
+    and resets on Monday.
+  - **Achievements** for workouts, streaks, records, total weight lifted and quests.
+  - Finishing a workout shows what it earned, with a level-up banner when you cross a level; the
+    live workout counts XP as you tick sets off.
+  - Nothing is stored: the hero is replayed from your history (`src/lib/rpg.ts`), so imported,
+    edited and restored workouts all count.
+  - The same tab keeps the training log: workouts total, this week, week streak, workouts-per-week
+    chart and training calendar.
 - **Measure** – body weight, body fat and body-part measurements with charts.
 - **Tools** – plate calculator (configurable bar and plates) and 1RM calculator with percentage table.
 - **Units** – metric or imperial.

@@ -17,6 +17,7 @@ import {
   latestMeasurements,
   listExercises,
   listMeasurements,
+  listProgressWorkouts,
   listTemplates,
   listWorkouts,
   reorderTemplates,
@@ -27,6 +28,7 @@ import {
   setTemplateFolder,
   workoutCount,
 } from './repo';
+import { computeProgress } from '../lib/rpg';
 import { migrateDb, SCHEMA_VERSION } from './schema';
 import { openTestDb } from './testDb';
 
@@ -378,5 +380,45 @@ describe('settings, measurements and backups', () => {
     withDb(async (db) => {
       await assert.rejects(restoreBackup(db, JSON.stringify({ hello: 'world' })), /Not a backup/);
       assert.equal((await listTemplates(db)).length, 5);
+    }));
+});
+
+describe('hero progression', () => {
+  test('workouts come back oldest first with what the XP rules need', () =>
+    withDb(async (db) => {
+      const bench = await exerciseId(db, 'Bench Press (Barbell)');
+      const plank = await exerciseId(db, 'Plank (Bodyweight)');
+      const save = (startedAt: number, weight: number) =>
+        saveWorkout(db, null, {
+          name: 'Push',
+          notes: '',
+          startedAt,
+          endedAt: startedAt + 3_600_000,
+          templateId: null,
+          exercises: [
+            { exerciseId: bench.id, notes: '', sets: [set(weight, 5), set(weight, 5)] },
+            { exerciseId: plank.id, notes: '', sets: [set(null, null, { durationS: 60 })] },
+            { exerciseId: bench.id, notes: '', sets: [] },
+          ],
+        });
+      const second = await save(2_000_000_000, 70);
+      const first = await save(1_000_000_000, 60);
+
+      const list = await listProgressWorkouts(db);
+      assert.deepEqual(list.map((w) => w.id), [first, second]);
+      assert.deepEqual(
+        list[0].exercises.map((e) => [e.exerciseId, e.type, e.bodyPart, e.sets.length]),
+        [
+          [bench.id, 'weight_reps', 'Chest', 2],
+          [plank.id, 'duration', 'Core', 1],
+        ],
+      );
+
+      const progress = computeProgress(list, 2_000_000_001);
+      // 2 sets + a 60 s plank + the workout bonus
+      assert.equal(progress.rewards.get(first)?.total, 20 + 10 + 50);
+      assert.equal(progress.rewards.get(second)?.records, 1);
+      assert.equal(progress.stats.might.xp, 20 + 20 + 25);
+      assert.equal(progress.stats.fortitude.xp, 20);
     }));
 });

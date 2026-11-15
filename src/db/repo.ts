@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { computeRecords, type Records } from '../lib/calc';
 import { guessExercise } from '../lib/exerciseGuess';
+import type { ProgressWorkout } from '../lib/rpg';
 import type { ImportedWorkout } from '../lib/strongCsv';
 import type {
   BodyPart,
@@ -142,6 +143,7 @@ export const DEFAULT_SETTINGS: Settings = {
   keepScreenOn: true,
   timerNotifications: true,
   bodyMapFigure: 'goblin',
+  heroName: '',
 };
 
 export const DEFAULT_IMPERIAL_PLATES = [45, 35, 25, 10, 5, 2.5];
@@ -608,6 +610,45 @@ export async function getRecordsBefore(
   );
   if (rows.length === 0) return null;
   return computeRecords(exercise.type, rows.map(toSet));
+}
+
+/** Every workout with just what the hero progression needs (see lib/rpg.ts), oldest first. */
+export async function listProgressWorkouts(db: SQLiteDatabase): Promise<ProgressWorkout[]> {
+  const rows = await db.getAllAsync<
+    SetRow & { workout_id: number; started_at: number; we_id: number; exercise_id: number; type: string; body_part: string; category: string | null }
+  >(
+    `SELECT w.id AS workout_id, w.started_at, we.id AS we_id, we.exercise_id, e.type, e.body_part, e.category,
+       s.set_type, s.weight, s.reps, s.duration_s, s.distance_m, s.rpe
+     FROM workouts w
+     JOIN workout_exercises we ON we.workout_id = w.id
+     JOIN exercises e ON e.id = we.exercise_id
+     JOIN workout_sets s ON s.workout_exercise_id = we.id
+     ORDER BY w.started_at, w.id, we.position, s.position`,
+  );
+  const workouts: ProgressWorkout[] = [];
+  let workout: ProgressWorkout | undefined;
+  let exercise: ProgressWorkout['exercises'][number] | undefined;
+  let weId = -1;
+  for (const r of rows) {
+    if (!workout || workout.id !== r.workout_id) {
+      workout = { id: r.workout_id, startedAt: r.started_at, exercises: [] };
+      workouts.push(workout);
+      weId = -1;
+    }
+    if (!exercise || weId !== r.we_id) {
+      weId = r.we_id;
+      exercise = {
+        exerciseId: r.exercise_id,
+        type: r.type as ExerciseType,
+        bodyPart: r.body_part as BodyPart,
+        category: r.category,
+        sets: [],
+      };
+      workout.exercises.push(exercise);
+    }
+    exercise.sets.push(toSet(r));
+  }
+  return workouts;
 }
 
 // ---------- Measurements ----------

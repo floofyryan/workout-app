@@ -31,7 +31,7 @@ export default function TabLayout() {
         headerTitleStyle: { fontWeight: '700', fontSize: 22 },
       }}
     >
-      <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: icon('person-circle-outline') }} />
+      <Tabs.Screen name="profile" options={{ title: 'Hero', tabBarIcon: icon('shield-half-outline') }} />
       <Tabs.Screen name="history" options={{ title: 'History', tabBarIcon: icon('time-outline') }} />
       <Tabs.Screen name="index" options={{ title: 'Workout', tabBarIcon: icon('add-circle') }} />
       <Tabs.Screen name="exercises" options={{ title: 'Exercises', tabBarIcon: icon('barbell-outline') }} />

@@ -13,6 +13,9 @@ export const colors = {
   danger: '#EF4444',
   warning: '#F59E0B',
   purple: '#A855F7',
+  /** XP, level-ups and rewards. */
+  xp: '#FBBF24',
+  xpDim: 'rgba(251,191,36,0.14)',
 };
 
 export const spacing = {

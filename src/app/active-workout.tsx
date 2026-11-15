@@ -19,6 +19,7 @@ import {
 } from '@/lib/activeWorkout';
 import { confirmAsync } from '@/lib/dialog';
 import { formatClock } from '@/lib/format';
+import { setXp } from '@/lib/rpg';
 import { useNow } from '@/lib/hooks';
 import { colors, radius, spacing } from '@/lib/theme';
 import { useActiveWorkout } from '@/state/ActiveWorkoutContext';
@@ -49,6 +50,13 @@ export default function ActiveWorkoutScreen() {
   }, [workout]);
 
   if (!workout) return <View style={{ flex: 1, backgroundColor: colors.background }} />;
+
+  // Set XP earned so far; records, streak and quest bonuses are added when the workout is saved.
+  let xp = 0;
+  for (const e of workout.exercises) {
+    const exercise = active.exercises.get(e.exerciseId);
+    if (exercise) for (const s of e.sets) if (s.completed) xp += setXp(exercise, s);
+  }
 
   const onFinish = async () => {
     if (completedExercises(workout).length === 0) {
@@ -119,6 +127,8 @@ export default function ActiveWorkoutScreen() {
         <View style={styles.timer}>
           <Ionicons name="time-outline" size={16} color={colors.muted} />
           <Text style={styles.timerText}>{formatClock((now - workout.startedAt) / 1000)}</Text>
+          <Ionicons name="flash" size={15} color={colors.xp} style={{ marginLeft: spacing.sm }} />
+          <Text style={[styles.timerText, { color: colors.xp }]}>{xp} XP</Text>
         </View>
         <Button title="Finish" variant="success" small onPress={onFinish} loading={saving} />
       </View>

@@ -179,6 +179,8 @@ export interface Settings {
   timerNotifications: boolean;
   /** Which figure the exercise body map shows. */
   bodyMapFigure: 'goblin' | 'male' | 'female';
+  /** What the hero is called on the character sheet (empty = "Hero"). */
+  heroName: string;
 }
 
 export const MEASUREMENT_TYPES = [
