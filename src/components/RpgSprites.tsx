@@ -14,42 +14,65 @@ function Shadow({ rx = 14 }: { rx?: number }) {
   return <Ellipse cx={32} cy={59.5} rx={rx} ry={2.8} fill="#000" opacity={0.35} />;
 }
 
-export function HeroSprite({ size = 80 }: { size?: number }) {
+/** Colours of the hero's gear for each tier (see GEAR_TIERS): leather, iron, steel, gold, dragonscale. */
+const HERO_TIERS = [
+  { tunic: '#8B5E34', tunicLine: '#5B3A1E', plate: '#B98552', plateLine: '#5B3A1E', helmet: '#A0703F', helmetLine: '#5B3A1E', band: '#7A5230', plume: null, blade: '#C8955E', bladeLine: '#7A5230', guard: '#7A5230', shield: '#8B5E34', rim: '#D6B370', cape: '#6B7280' },
+  { tunic: '#2563EB', tunicLine: '#1E3A8A', plate: '#CBD5E1', plateLine: '#64748B', helmet: '#94A3B8', helmetLine: '#475569', band: '#64748B', plume: '#DC2626', blade: '#E2E8F0', bladeLine: '#94A3B8', guard: '#FACC15', shield: '#B91C1C', rim: '#FACC15', cape: '#B91C1C' },
+  { tunic: '#1E3A8A', tunicLine: '#172554', plate: '#E5E7EB', plateLine: '#475569', helmet: '#CBD5E1', helmetLine: '#334155', band: '#475569', plume: '#2563EB', blade: '#F8FAFC', bladeLine: '#64748B', guard: '#94A3B8', shield: '#1D4ED8', rim: '#E5E7EB', cape: '#7C3AED' },
+  { tunic: '#7C2D12', tunicLine: '#431407', plate: '#FACC15', plateLine: '#A16207', helmet: '#EAB308', helmetLine: '#A16207', band: '#CA8A04', plume: '#F8FAFC', blade: '#FDE047', bladeLine: '#CA8A04', guard: '#F8FAFC', shield: '#7C3AED', rim: '#FACC15', cape: '#6D28D9' },
+  { tunic: '#450A0A', tunicLine: '#1C0505', plate: '#DC2626', plateLine: '#7F1D1D', helmet: '#27272A', helmetLine: '#09090B', band: '#7F1D1D', plume: '#F97316', blade: '#FB923C', bladeLine: '#C2410C', guard: '#FACC15', shield: '#18181B', rim: '#DC2626', cape: '#DC2626' },
+];
+
+export function HeroSprite({ size = 80, tier = 1 }: { size?: number; tier?: number }) {
+  const t = HERO_TIERS[Math.max(0, Math.min(HERO_TIERS.length - 1, tier))];
   const skin = '#F2C9A0';
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64" accessibilityLabel="hero">
+      {tier >= 4 ? <Circle cx={32} cy={34} r={27} fill="#F97316" opacity={0.12} /> : null}
+      {tier === 3 ? <Circle cx={32} cy={34} r={27} fill="#FACC15" opacity={0.08} /> : null}
       <Shadow />
       {/* cape */}
-      <Path d="M23 31 Q15 45 19 57 L31 53 Z" fill="#B91C1C" />
+      <Path d="M23 31 Q15 45 19 57 L31 53 Z" fill={t.cape} />
       {/* legs and boots */}
       <Rect x={25} y={47} width={6} height={10} rx={2} fill="#3F3A52" />
       <Rect x={33} y={47} width={6} height={10} rx={2} fill="#3F3A52" />
       <Rect x={24} y={55} width={8} height={4} rx={1.5} fill="#5B3A1E" />
       <Rect x={32} y={55} width={9} height={4} rx={1.5} fill="#5B3A1E" />
       {/* tunic, breastplate, belt */}
-      <Path d="M23 32 Q32 28 41 32 L42 50 Q32 53 22 50 Z" fill="#2563EB" stroke="#1E3A8A" strokeWidth={1} />
-      <Path d="M26 33 Q32 31 38 33 L38 42 Q32 45 26 42 Z" fill="#CBD5E1" stroke="#64748B" strokeWidth={0.8} />
+      <Path d="M23 32 Q32 28 41 32 L42 50 Q32 53 22 50 Z" fill={t.tunic} stroke={t.tunicLine} strokeWidth={1} />
+      <Path d="M26 33 Q32 31 38 33 L38 42 Q32 45 26 42 Z" fill={t.plate} stroke={t.plateLine} strokeWidth={0.8} />
+      {tier >= 4 ? (
+        <Path d="M27 35.5 Q29 37 31 35.5 Q33 37 35 35.5 Q37 37 37.5 35.5 M27 39 Q29 40.5 31 39 Q33 40.5 35 39 Q37 40.5 37.5 39" stroke={t.plateLine} strokeWidth={0.7} fill="none" />
+      ) : null}
       <Rect x={22} y={45} width={20} height={3} fill="#5B3A1E" />
       <Rect x={30} y={44.5} width={4} height={4} rx={0.8} fill="#FACC15" />
       {/* sword arm */}
-      <Path d="M39 34 Q44 36 45.5 40" stroke="#2563EB" strokeWidth={4.5} strokeLinecap="round" fill="none" />
-      <Path d="M44.2 12 L46 7.5 L47.8 12 Z" fill="#E2E8F0" stroke="#94A3B8" strokeWidth={0.6} />
-      <Rect x={44.2} y={12} width={3.6} height={26} fill="#E2E8F0" stroke="#94A3B8" strokeWidth={0.6} />
-      <Line x1={46} y1={13} x2={46} y2={36} stroke="#94A3B8" strokeWidth={0.6} />
-      <Rect x={40.5} y={37} width={11} height={2.6} rx={1} fill="#FACC15" stroke="#A16207" strokeWidth={0.5} />
+      <Path d="M39 34 Q44 36 45.5 40" stroke={t.tunic} strokeWidth={4.5} strokeLinecap="round" fill="none" />
+      {tier >= 4 ? <Path d="M46 4 Q41 14 44 24 Q46 30 46 36 Q47 26 50 20 Q51 12 46 4 Z" fill="#FDE047" opacity={0.55} /> : null}
+      <Path d={tier >= 2 ? 'M44.2 9 L46 4.5 L47.8 9 Z' : 'M44.2 12 L46 7.5 L47.8 12 Z'} fill={t.blade} stroke={t.bladeLine} strokeWidth={0.6} />
+      <Rect x={44.2} y={tier >= 2 ? 9 : 12} width={3.6} height={tier >= 2 ? 29 : 26} fill={t.blade} stroke={t.bladeLine} strokeWidth={0.6} />
+      <Line x1={46} y1={tier >= 2 ? 10 : 13} x2={46} y2={36} stroke={t.bladeLine} strokeWidth={0.6} />
+      <Rect x={40.5} y={37} width={11} height={2.6} rx={1} fill={t.guard} stroke="#57534E" strokeWidth={0.5} />
       <Rect x={44.8} y={39.5} width={2.4} height={5} fill="#5B3A1E" />
       <Circle cx={46} cy={41.5} r={2.6} fill={skin} stroke="#B07D55" strokeWidth={0.6} />
       {/* head and helmet */}
       <Circle cx={32} cy={21} r={9} fill={skin} stroke="#B07D55" strokeWidth={0.8} />
-      <Path d="M32 11 Q36 3 43 5 Q37 7.5 34.5 12 Z" fill="#DC2626" />
-      <Path d="M22.3 20 A9.7 9.7 0 0 1 41.7 20 Z" fill="#94A3B8" stroke="#475569" strokeWidth={0.8} />
-      <Rect x={22} y={18.5} width={20} height={3} rx={1} fill="#64748B" />
+      {t.plume ? <Path d="M32 11 Q36 3 43 5 Q37 7.5 34.5 12 Z" fill={t.plume} /> : null}
+      <Path d="M22.3 20 A9.7 9.7 0 0 1 41.7 20 Z" fill={t.helmet} stroke={t.helmetLine} strokeWidth={0.8} />
+      <Rect x={22} y={18.5} width={20} height={3} rx={1} fill={t.band} />
+      {tier >= 4 ? <Path d="M24 14 L21 7 L27 12 Z M40 14 L43 7 L37 12 Z" fill="#E7E5E4" stroke="#78716C" strokeWidth={0.5} /> : null}
       <Circle cx={29.5} cy={24} r={1.3} fill={DARK} />
       <Circle cx={36} cy={24} r={1.3} fill={DARK} />
       <Path d="M31.5 27.5 Q34 29 36.5 27.5" stroke={DARK} strokeWidth={1} fill="none" strokeLinecap="round" />
       {/* shield */}
-      <Circle cx={22} cy={40} r={7.5} fill="#B91C1C" stroke="#FACC15" strokeWidth={1.5} />
-      <Path d="M22 35 L22 45 M17 40 L27 40" stroke="#FACC15" strokeWidth={1.5} />
+      <Circle cx={22} cy={40} r={7.5} fill={t.shield} stroke={t.rim} strokeWidth={1.5} />
+      {tier === 0 ? (
+        <Circle cx={22} cy={40} r={2} fill={t.rim} />
+      ) : tier >= 4 ? (
+        <Path d="M22 35 L24 39 L22 45 L20 39 Z" fill={t.rim} />
+      ) : (
+        <Path d="M22 35 L22 45 M17 40 L27 40" stroke={t.rim} strokeWidth={1.5} />
+      )}
     </Svg>
   );
 }
@@ -234,6 +257,32 @@ function Dragon() {
   );
 }
 
+function Wraith() {
+  const cloak = '#3B0764';
+  return (
+    <>
+      <Shadow rx={12} />
+      <Line x1={15} y1={11} x2={21} y2={57} stroke="#57534E" strokeWidth={2} strokeLinecap="round" />
+      <Path d="M15 12 Q3 13 0.5 25 Q6 18 15.5 17 Z" fill="#E5E7EB" stroke="#6B7280" strokeWidth={0.8} />
+      <Path
+        d="M32 9 Q20 11 18.5 29 Q17 45 13 55 Q18 52 22 56.5 Q26 52.5 32 56.5 Q38 52.5 42 56.5 Q46 52 51 55 Q47 45 45.5 29 Q44 11 32 9 Z"
+        fill={cloak}
+        stroke="#1E0536"
+        strokeWidth={1}
+      />
+      <Path d="M24 30 Q32 34 40 30 M23 40 Q32 45 41 40" stroke="#581C87" strokeWidth={1} fill="none" />
+      <Ellipse cx={30.5} cy={23} rx={7} ry={8} fill="#0B0613" />
+      <Ellipse cx={27.8} cy={23} rx={1.7} ry={1.1} fill="#E879F9" />
+      <Ellipse cx={33.4} cy={23} rx={1.7} ry={1.1} fill="#E879F9" />
+      <Circle cx={18.5} cy={37} r={2.6} fill="#D8B4FE" />
+      {/* the trophy it guards */}
+      <Path d="M28 35 L36 35 L35.2 39 Q32 41.5 28.8 39 Z" fill="#FACC15" stroke="#A16207" strokeWidth={0.6} />
+      <Rect x={31.2} y={40.5} width={1.6} height={2.5} fill="#FACC15" />
+      <Rect x={29.5} y={43} width={5} height={1.4} rx={0.5} fill="#FACC15" />
+    </>
+  );
+}
+
 const MONSTERS: Record<MonsterKind, { Body: () => ReactElement; crownBase: number }> = {
   slime: { Body: Slime, crownBase: 23 },
   bat: { Body: Bat, crownBase: 25 },
@@ -242,6 +291,7 @@ const MONSTERS: Record<MonsterKind, { Body: () => ReactElement; crownBase: numbe
   ogre: { Body: Ogre, crownBase: 14.5 },
   golem: { Body: Golem, crownBase: 12 },
   dragon: { Body: Dragon, crownBase: 0 },
+  wraith: { Body: Wraith, crownBase: 0 },
 };
 
 export function MonsterSprite({ kind, size = 80, elite }: { kind: MonsterKind; size?: number; elite?: boolean }) {
@@ -249,7 +299,7 @@ export function MonsterSprite({ kind, size = 80, elite }: { kind: MonsterKind; s
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64" accessibilityLabel={`monster-${kind}`}>
       <Body />
-      {elite && kind !== 'dragon' ? (
+      {elite && kind !== 'dragon' && kind !== 'wraith' ? (
         <G transform={`translate(0 ${crownBase - 8})`}>
           <Path d="M25 8 L26 1.5 L29.3 5.5 L32 0.5 L34.7 5.5 L38 1.5 L39 8 Z" fill="#FACC15" stroke="#A16207" strokeWidth={0.8} />
           <Circle cx={32} cy={5.8} r={1} fill="#EF4444" />

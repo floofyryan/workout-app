@@ -235,6 +235,7 @@ describe('workouts', () => {
       assert.deepEqual(entries.map((e) => e.set.weight).sort(), [60, 70]);
       assert.equal(entries[0].bodyPart, 'Chest');
       assert.equal(entries[0].type, 'weight_reps');
+      assert.deepEqual(entries.map((e) => e.startedAt).sort(), [1_000, 2_000]);
       assert.equal((await getStatEntries(db)).length, 3);
     }));
 

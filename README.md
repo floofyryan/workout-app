@@ -42,8 +42,16 @@ in SQLite.
     trains one of five attributes: **STR** (upper body), **CON** (legs), **DEX** (core, plyo, Olympic
     lifts), **STA** (cardio) and **WIS** (stretching). Your highest attribute sets your class
     (Barbarian, Juggernaut, Rogue, Ranger, Monk) and your level your rank (Novice → Legendary).
-  - Profile shows the character sheet; the finished-workout screen shows XP earned, monsters slain,
-    level-ups and attribute gains. It's all derived from your history, so imported workouts count too.
+  - The **Record Keeper**, a hooded wraith, guards any set planned to beat a personal record; slay
+    it with a record-breaking set for a "NEW RECORD!". Level-ups pop up mid-fight too.
+  - **Gear** upgrades with your rank, and the hero's look changes with it: Wooden Sword & Leather
+    Tunic → Iron Sword & Chainmail (level 5) → Steel Longsword & Plate (10) → Golden Blade & Gilded
+    Plate (20) → Flameblade & Dragonscale (35).
+  - **Achievements** with progress bars: First Blood, Monster Hunter, Dragon Slayer, Iron Will (4-week
+    streak), Centurion (100 kg set), Wanderer (5 km), Zen Master, Veteran, Renaissance Hero, Dungeon
+    Regular and Legendary Slayer.
+  - Profile shows the character sheet, gear and achievements; the finished-workout screen shows XP
+    earned, monsters slain, level-ups, new gear, unlocked achievements and attribute gains. It's all derived from your history, so imported workouts count too.
 - **Tracking types** – weight & reps, reps only, weighted bodyweight (+kg), assisted bodyweight
   (−kg), duration, distance & duration.
 - **History** – workouts grouped by month with "Exercise | Best set" summaries; open one to see

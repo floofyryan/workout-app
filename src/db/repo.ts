@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { computeRecords, type Records } from '../lib/calc';
 import { guessExercise } from '../lib/exerciseGuess';
-import type { StatEntry } from '../lib/rpg';
+import type { AchievementEntry } from '../lib/rpg';
 import type { ImportedWorkout } from '../lib/strongCsv';
 import type {
   BodyPart,
@@ -616,9 +616,12 @@ export async function getRecordsBefore(
  * Every logged set with its exercise's type, body part and category (for adventure-mode XP and
  * attributes), from workouts started before `before`.
  */
-export async function getStatEntries(db: SQLiteDatabase, before = Number.MAX_SAFE_INTEGER): Promise<StatEntry[]> {
-  const rows = await db.getAllAsync<SetRow & { type: string; body_part: string; category: string | null }>(
-    `SELECT s.set_type, s.weight, s.reps, s.duration_s, s.distance_m, s.rpe, e.type, e.body_part, e.category
+export async function getStatEntries(db: SQLiteDatabase, before = Number.MAX_SAFE_INTEGER): Promise<AchievementEntry[]> {
+  const rows = await db.getAllAsync<
+    SetRow & { type: string; body_part: string; category: string | null; workout_id: number; started_at: number }
+  >(
+    `SELECT s.set_type, s.weight, s.reps, s.duration_s, s.distance_m, s.rpe, e.type, e.body_part, e.category,
+            w.id AS workout_id, w.started_at
      FROM workout_sets s
      JOIN workout_exercises we ON we.id = s.workout_exercise_id
      JOIN workouts w ON w.id = we.workout_id
@@ -631,6 +634,8 @@ export async function getStatEntries(db: SQLiteDatabase, before = Number.MAX_SAF
     bodyPart: r.body_part as BodyPart,
     category: r.category,
     set: toSet(r),
+    workoutId: r.workout_id,
+    startedAt: r.started_at,
   }));
 }
 

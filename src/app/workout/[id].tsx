@@ -13,7 +13,7 @@ import { deleteWorkout, getRecordsBefore, getStatEntries, getWorkout, saveTempla
 import { computeRecords, estimate1RM, newRecords, RECORD_LABELS, type RecordKey } from '@/lib/calc';
 import { formatDate, formatDuration, formatNumber, formatTime } from '@/lib/format';
 import { useFocusQuery } from '@/lib/hooks';
-import { characterFrom, STAT_INFO, STATS, type Stat as Attribute } from '@/lib/rpg';
+import { achievementsFrom, characterFrom, gearTier, GEAR_TIERS, STAT_INFO, STATS, type Stat as Attribute } from '@/lib/rpg';
 import { formatSet, SET_TYPE_LABEL } from '@/lib/setFormat';
 import { colors, radius, spacing } from '@/lib/theme';
 import { exerciseCategory, type Template, type WorkoutDetail } from '@/lib/types';
@@ -28,14 +28,26 @@ interface QuestReward {
   levelAfter: number;
   title: string;
   gains: { stat: Attribute; to: number }[];
+  /** Achievements this workout unlocked. */
+  unlocked: string[];
+  /** New gear when the level-up reached a new tier. */
+  newGear: string | null;
 }
 
 /** XP, kills, level-ups and attribute gains from one workout, against everything done before it. */
 async function questReward(db: Parameters<typeof getStatEntries>[0], w: WorkoutDetail): Promise<QuestReward> {
   const before = await getStatEntries(db, w.startedAt);
   const own = w.exercises.flatMap((e) =>
-    e.sets.map((set) => ({ type: e.exercise.type, bodyPart: e.exercise.bodyPart, category: e.exercise.category, set })),
+    e.sets.map((set) => ({
+      type: e.exercise.type,
+      bodyPart: e.exercise.bodyPart,
+      category: e.exercise.category,
+      set,
+      workoutId: w.id,
+      startedAt: w.startedAt,
+    })),
   );
+  const had = new Set(achievementsFrom(before).filter((x) => x.unlocked).map((x) => x.id));
   const a = characterFrom(before);
   const b = characterFrom([...before, ...own]);
   return {
@@ -45,6 +57,11 @@ async function questReward(db: Parameters<typeof getStatEntries>[0], w: WorkoutD
     levelAfter: b.level.level,
     title: b.title,
     gains: STATS.filter((s) => b.stats[s].value > a.stats[s].value).map((stat) => ({ stat, to: b.stats[stat].value })),
+    unlocked: achievementsFrom([...before, ...own])
+      .filter((x) => x.unlocked && !had.has(x.id))
+      .map((x) => x.name),
+    newGear:
+      gearTier(b.level.level) > gearTier(a.level.level) ? GEAR_TIERS[gearTier(b.level.level)].weapon : null,
   };
 }
 
@@ -257,9 +274,16 @@ function QuestRewardCard({ reward: r, summary, prs }: { reward: QuestReward; sum
           <Ionicons name="arrow-up-circle" size={18} color={colors.warning} />
           <Text style={styles.levelUpText}>
             Level up! {r.levelBefore} → {r.levelAfter} · {r.title}
+            {r.newGear ? `\nNew gear: ${r.newGear}` : ''}
           </Text>
         </View>
       )}
+      {r.unlocked.map((name) => (
+        <View key={name} style={styles.levelUp}>
+          <Ionicons name="medal" size={18} color={colors.warning} />
+          <Text style={styles.levelUpText}>Achievement unlocked: {name}</Text>
+        </View>
+      ))}
       {r.gains.length > 0 && (
         <View style={styles.prRow}>
           {r.gains.map((g) => (

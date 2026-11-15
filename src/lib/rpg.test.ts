@@ -3,8 +3,12 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { newActiveSet, type ActiveWorkout } from './activeWorkout';
+import { computeRecords } from './calc';
 import {
+  achievementsFrom,
   characterFrom,
+  gearTier,
+  longestWeekStreak,
   dungeonRooms,
   levelFromXp,
   monsterFor,
@@ -99,6 +103,57 @@ describe('monsterFor', () => {
   });
   it('fills blank planned values from last time', () => {
     assert.equal(monsterFor(squat, [set(null, null)], 0, [set(100, 5)]).xp, setXp('weight_reps', set(100, 5)));
+  });
+});
+
+describe('record keeper', () => {
+  const bench = { type: 'weight_reps' as const, bodyPart: 'Chest' as const, category: null };
+  const records = computeRecords('weight_reps', [set(100, 5)]);
+  it('guards a set that would beat a record', () => {
+    const m = monsterFor(bench, [set(105, 5)], 0, [], records);
+    assert.equal(m.kind, 'wraith');
+    assert.equal(m.record, true);
+    assert.equal(m.boss, true);
+  });
+  it('stays away from ordinary sets, warm-ups and new exercises', () => {
+    assert.equal(monsterFor(bench, [set(90, 5)], 0, [], records).record, false);
+    assert.equal(monsterFor(bench, [set(120, 5, 'warmup')], 0, [], records).kind, 'slime');
+    assert.equal(monsterFor(bench, [set(120, 5)], 0, [], null).record, false);
+  });
+});
+
+describe('gear', () => {
+  it('upgrades with the rank levels', () => {
+    assert.deepEqual([1, 4, 5, 9, 10, 20, 35, 80].map(gearTier), [0, 0, 1, 1, 2, 3, 4, 4]);
+  });
+});
+
+describe('achievements', () => {
+  const WEEK = 7 * 86_400_000;
+  const monday = new Date(2026, 0, 5, 12).getTime();
+  it('counts consecutive weeks', () => {
+    assert.equal(longestWeekStreak([]), 0);
+    assert.equal(longestWeekStreak([monday, monday + 86_400_000]), 1);
+    assert.equal(longestWeekStreak([monday, monday + WEEK, monday + 3 * WEEK, monday + 4 * WEEK, monday + 5 * WEEK]), 3);
+  });
+  it('tracks progress and unlocks', () => {
+    const entry = (workoutId: number, s: SetData) => ({
+      type: 'weight_reps' as const,
+      bodyPart: 'Quads' as const,
+      category: null,
+      set: s,
+      workoutId,
+      startedAt: monday + (workoutId - 1) * WEEK,
+    });
+    const list = achievementsFrom([entry(1, set(80, 5)), entry(2, set(105, 3, 'failure')), entry(3, set(60, 5)), entry(4, set(60, 5))]);
+    const get = (id: string) => list.find((a) => a.id === id)!;
+    assert.equal(get('first').unlocked, true);
+    assert.equal(get('dragon').unlocked, true);
+    assert.equal(get('centurion').unlocked, true);
+    assert.equal(get('streak').unlocked, true);
+    assert.equal(get('hunter').unlocked, false);
+    assert.equal(get('hunter').progress, 4);
+    assert.equal(achievementsFrom([]).some((a) => a.unlocked), false);
   });
 });
 

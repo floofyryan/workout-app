@@ -1,12 +1,26 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Ellipse, Path, Rect } from 'react-native-svg';
 
+import { getRecordsBefore, getStatEntries } from '@/db/repo';
 import type { ActiveWorkout } from '@/lib/activeWorkout';
+import type { Records } from '@/lib/calc';
 import { formatClock } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
-import { dungeonProgress, monsterFor, nextEncounter, setXp, type Monster, type StatSource } from '@/lib/rpg';
+import {
+  beatsRecord,
+  characterFrom,
+  dungeonProgress,
+  gearTier,
+  levelFromXp,
+  monsterFor,
+  nextEncounter,
+  setXp,
+  type Monster,
+  type StatSource,
+} from '@/lib/rpg';
 import { formatSet } from '@/lib/setFormat';
 import { colors, radius, spacing } from '@/lib/theme';
 import type { Exercise, SetData, UnitSystem } from '@/lib/types';
@@ -45,23 +59,73 @@ function targetText(ex: Exercise | undefined, set: SetData, prev: SetData | unde
 
 const article = (name: string) => (/^[AEIOU]/i.test(name) ? 'An' : 'A');
 
+interface Slain {
+  monster: Monster;
+  xp: number;
+  /** The set that slew it beat a personal record. */
+  record: boolean;
+  /** New hero level when this kill levelled up. */
+  levelUp: number | null;
+}
+
 /**
  * Adventure mode on the live workout: the hero fights one monster per set. Ticking a set off
  * slays the monster in front of you; the dungeon guide says which exercise and set is next.
  */
 export function DungeonBattle({ workout, units }: { workout: ActiveWorkout; units: UnitSystem }) {
+  const db = useSQLiteContext();
   const { exercises, previous, restTimer, setTimer } = useActiveWorkout();
   const now = useNow(500);
+
+  // XP from earlier workouts (for the hero's level and gear) and each exercise's records so far.
+  const [baseXp, setBaseXp] = useState<number | null>(null);
+  const baseXpRef = useRef<number | null>(null);
+  useEffect(() => {
+    let active = true;
+    getStatEntries(db, workout.startedAt).then((entries) => {
+      if (!active) return;
+      const xp = characterFrom(entries).xp;
+      baseXpRef.current = xp;
+      setBaseXp(xp);
+    });
+    return () => {
+      active = false;
+    };
+  }, [db, workout.startedAt]);
+
+  const [records, setRecords] = useState<Map<number, Records | null>>(new Map());
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const map = new Map<number, Records | null>();
+      for (const ex of exercises.values()) map.set(ex.id, await getRecordsBefore(db, ex, workout.startedAt));
+      if (active) setRecords(map);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [db, exercises, workout.startedAt]);
+  const recordsRef = useRef(records);
+  useEffect(() => {
+    recordsRef.current = records;
+  }, [records]);
   const [collapsed, setCollapsed] = useState(collapsedMemo);
 
   const encounter = nextEncounter(workout);
   const { done, total } = dungeonProgress(workout);
   const xp = useMemo(() => sessionXp(workout, exercises), [workout, exercises]);
+  const heroLevel = baseXp == null ? null : levelFromXp(baseXp + xp).level;
 
   const current = encounter ? workout.exercises[encounter.exerciseIndex] : null;
   const currentEx = current ? exercises.get(current.exerciseId) : undefined;
   const monster: Monster | null = current
-    ? monsterFor(currentEx ?? UNKNOWN, current.sets, encounter!.setIndex, previous.get(current.exerciseId))
+    ? monsterFor(
+        currentEx ?? UNKNOWN,
+        current.sets,
+        encounter!.setIndex,
+        previous.get(current.exerciseId),
+        records.get(current.exerciseId),
+      )
     : null;
 
   // ---------- Animations ----------
@@ -72,7 +136,7 @@ export function DungeonBattle({ workout, units }: { workout: ActiveWorkout; unit
   const [monsterScale] = useState(() => new Animated.Value(1));
   const [slash] = useState(() => new Animated.Value(0));
   const [xpFloat] = useState(() => new Animated.Value(0));
-  const [dying, setDying] = useState<{ monster: Monster; xp: number } | null>(null);
+  const [dying, setDying] = useState<Slain | null>(null);
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -90,21 +154,34 @@ export function DungeonBattle({ workout, units }: { workout: ActiveWorkout; unit
   const attackAnim = useRef<Animated.CompositeAnimation | null>(null);
   useEffect(() => {
     const completed = new Set<string>();
-    let slain: { monster: Monster; xp: number } | null = null;
+    let slain = null as Slain | null; // Assigned in the callback below, which TypeScript does not track.
     for (const e of workout.exercises) {
       e.sets.forEach((s, i) => {
         if (!s.completed) return;
         completed.add(s.key);
         if (prevCompleted.current && !prevCompleted.current.has(s.key)) {
           const ex = exercises.get(e.exerciseId);
-          const gained = setXp(ex?.type ?? 'weight_reps', s);
-          if (slain) slain.xp += gained;
-          else slain = { monster: monsterFor(ex ?? UNKNOWN, e.sets, i, previous.get(e.exerciseId)), xp: gained };
+          const source = ex ?? UNKNOWN;
+          const recs = recordsRef.current.get(e.exerciseId);
+          const gained = setXp(source.type, s);
+          const record = beatsRecord(source.type, s, recs);
+          if (slain) {
+            slain.xp += gained;
+            slain.record ||= record;
+          } else {
+            const monster = monsterFor(source, e.sets, i, previous.get(e.exerciseId), recs);
+            slain = { monster, xp: gained, record, levelUp: null };
+          }
         }
       });
     }
     prevCompleted.current = completed;
     if (!slain) return;
+    if (baseXpRef.current != null) {
+      const total = baseXpRef.current + sessionXp(workout, exercises);
+      const after = levelFromXp(total).level;
+      if (after > levelFromXp(total - slain.xp).level) slain.levelUp = after;
+    }
 
     setDying(slain);
     monsterOpacity.setValue(1);
@@ -129,7 +206,7 @@ export function DungeonBattle({ workout, units }: { workout: ActiveWorkout; unit
             Animated.timing(monsterScale, { toValue: 0.5, duration: 380, ...driver }),
           ]),
         ]),
-        Animated.timing(xpFloat, { toValue: 1, duration: 1100, easing: Easing.out(Easing.quad), ...driver }),
+        Animated.timing(xpFloat, { toValue: 1, duration: slain.levelUp || slain.record ? 1900 : 1100, easing: Easing.out(Easing.quad), ...driver }),
       ]),
     ]);
     attackAnim.current?.stop();
@@ -175,6 +252,7 @@ export function DungeonBattle({ workout, units }: { workout: ActiveWorkout; unit
     const foe = `${article(monster.name)} ${monster.name}`;
     if (holding) guide = `Hold the line! ${formatClock(Math.ceil(holdLeft))} until the ${monster.name} falls.`;
     else if (restTimer && restLeft > 0) guide = `Catch your breath… ${foe.toLowerCase()} attacks in ${formatClock(restLeft)}.`;
+    else if (monster.record) guide = `The Record Keeper guards your best! Beat it${target ? ` with ${target}` : ''} for a new PR.`;
     else if (monster.boss) guide = `${foe} awakens! Go all out${target ? `: ${target}` : ''}.`;
     else if (monster.elite) guide = `${foe} guards the exit${target ? `. Defeat it with ${target}` : ''}.`;
     else guide = `${foe} blocks the way${target ? `. Strike with ${target}` : ''}.`;
@@ -204,19 +282,24 @@ export function DungeonBattle({ workout, units }: { workout: ActiveWorkout; unit
               { transform: [{ translateX: heroX }, { translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [0, -2] }) }] },
             ]}
           >
-            <HeroSprite size={SPRITE} />
+            {heroLevel != null && (
+              <View style={styles.heroBadge}>
+                <Text style={styles.heroBadgeText}>Lv {heroLevel}</Text>
+              </View>
+            )}
+            <HeroSprite size={SPRITE} tier={gearTier(heroLevel ?? 1)} />
           </Animated.View>
 
           <View style={styles.foe}>
             {shown ? (
               <>
-                <View style={styles.nameplate}>
-                  <Text style={[styles.foeName, shown.boss && { color: '#F87171' }, shown.elite && { color: '#FACC15' }]} numberOfLines={1}>
+                <View style={[styles.nameplate, dying && { opacity: 0 }]}>
+                  <Text style={[styles.foeName, shown.boss && { color: '#F87171' }, shown.record && { color: '#E879F9' }, shown.elite && { color: '#FACC15' }]} numberOfLines={1}>
                     {shown.name}
                   </Text>
                   <Text style={styles.foeLevel}>Lv {shown.level}</Text>
                 </View>
-                <View style={styles.hpTrack}>
+                <View style={[styles.hpTrack, dying && { opacity: 0 }]}>
                   <View style={[styles.hpFill, { width: `${Math.round(hp * 100)}%` }]} />
                 </View>
                 <Animated.View
@@ -239,17 +322,20 @@ export function DungeonBattle({ workout, units }: { workout: ActiveWorkout; unit
               <ChestSprite size={SPRITE} />
             ) : null}
             {dying ? (
-              <Animated.Text
+              <Animated.View
+                pointerEvents="none"
                 style={[
-                  styles.xpFloat,
+                  styles.floats,
                   {
-                    opacity: xpFloat.interpolate({ inputRange: [0, 0.7, 1], outputRange: [1, 1, 0] }),
-                    transform: [{ translateY: xpFloat.interpolate({ inputRange: [0, 1], outputRange: [0, -36] }) }],
+                    opacity: xpFloat.interpolate({ inputRange: [0, 0.75, 1], outputRange: [1, 1, 0] }),
+                    transform: [{ translateY: xpFloat.interpolate({ inputRange: [0, 1], outputRange: [0, -30] }) }],
                   },
                 ]}
               >
-                +{dying.xp} XP
-              </Animated.Text>
+                {dying.levelUp ? <Text style={[styles.float, { color: '#4ADE80' }]}>LEVEL {dying.levelUp}!</Text> : null}
+                {dying.record ? <Text style={[styles.float, { color: '#E879F9' }]}>NEW RECORD!</Text> : null}
+                <Text style={styles.float}>+{dying.xp} XP</Text>
+              </Animated.View>
             ) : null}
           </View>
         </View>
@@ -341,7 +427,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     transform: [{ rotate: '-35deg' }],
   },
-  xpFloat: { position: 'absolute', top: 18, color: '#FACC15', fontWeight: '800', fontSize: 15 },
+  floats: { position: 'absolute', bottom: 70, alignItems: 'center', width: 160 },
+  float: { color: '#FACC15', fontWeight: '800', fontSize: 15, textShadowColor: '#000', textShadowRadius: 3 },
+  heroBadge: {
+    position: 'absolute',
+    top: -6,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    zIndex: 1,
+  },
+  heroBadgeText: { color: colors.warning, fontSize: 10, fontWeight: '800' },
   guide: { color: colors.muted, fontSize: 13, paddingHorizontal: 4, paddingTop: spacing.sm },
   footer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: 4, paddingTop: spacing.xs },
   progressTrack: { flex: 1, height: 6, borderRadius: 3, backgroundColor: colors.cardAlt, overflow: 'hidden' },

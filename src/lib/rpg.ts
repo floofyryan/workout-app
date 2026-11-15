@@ -3,6 +3,8 @@
 // raises five attributes. Everything here is derived from the workout history, nothing is stored.
 
 import type { ActiveSet, ActiveWorkout } from './activeWorkout';
+import { computeRecords, newRecords, type Records } from './calc';
+import { startOfWeek } from './format';
 import { exerciseCategory, type BodyPart, type ExerciseType, type SetData } from './types';
 
 // ---------- XP ----------
@@ -67,6 +69,31 @@ export function rankTitle(level: number): string {
   if (level >= 10) return 'Veteran';
   if (level >= 5) return 'Apprentice';
   return 'Novice';
+}
+
+// ---------- Gear ----------
+
+/** Equipment the hero wears, upgraded at the same levels as the rank. */
+export const GEAR_TIERS = [
+  { minLevel: 1, weapon: 'Wooden Sword', armor: 'Leather Tunic' },
+  { minLevel: 5, weapon: 'Iron Sword', armor: 'Chainmail' },
+  { minLevel: 10, weapon: 'Steel Longsword', armor: 'Plate Armor' },
+  { minLevel: 20, weapon: 'Golden Blade', armor: 'Gilded Plate' },
+  { minLevel: 35, weapon: 'Flameblade', armor: 'Dragonscale Armor' },
+] as const;
+
+/** Index into GEAR_TIERS for a level. */
+export function gearTier(level: number): number {
+  let tier = 0;
+  GEAR_TIERS.forEach((g, i) => {
+    if (level >= g.minLevel) tier = i;
+  });
+  return tier;
+}
+
+/** The next gear upgrade, or null at the top tier. */
+export function nextGear(level: number) {
+  return GEAR_TIERS[gearTier(level) + 1] ?? null;
 }
 
 // ---------- Attributes ----------
@@ -156,7 +183,7 @@ export function characterFrom(entries: StatEntry[]): Character {
 
 // ---------- Monsters ----------
 
-export type MonsterKind = 'slime' | 'bat' | 'skeleton' | 'goblin' | 'ogre' | 'golem' | 'dragon';
+export type MonsterKind = 'slime' | 'bat' | 'skeleton' | 'goblin' | 'ogre' | 'golem' | 'dragon' | 'wraith';
 
 export interface Monster {
   kind: MonsterKind;
@@ -166,8 +193,10 @@ export interface Monster {
   xp: number;
   /** Last working set of an exercise: a tougher, crowned monster. */
   elite: boolean;
-  /** Set to failure: a dragon. */
+  /** Set to failure or a personal record attempt. */
   boss: boolean;
+  /** The planned set would beat a personal record: the Record Keeper. */
+  record: boolean;
 }
 
 interface Family {
@@ -209,19 +238,36 @@ function plannedSet(s: SetData, previous: SetData | undefined): SetData {
   };
 }
 
-/** The monster guarding set `index` of an exercise. */
-export function monsterFor(e: StatSource, sets: SetData[], index: number, previous: SetData[] = []): Monster {
+/** Whether a set would beat the exercise's records (none without earlier history). */
+export function beatsRecord(type: ExerciseType, s: SetData, records: Records | null | undefined): boolean {
+  if (!records || s.setType === 'warmup') return false;
+  return newRecords(type, records, computeRecords(type, [s])).length > 0;
+}
+
+/**
+ * The monster guarding set `index` of an exercise. `records` are the exercise's bests before this
+ * workout: a set planned to beat them is guarded by the Record Keeper.
+ */
+export function monsterFor(
+  e: StatSource,
+  sets: SetData[],
+  index: number,
+  previous: SetData[] = [],
+  records?: Records | null,
+): Monster {
   const s = plannedSet(sets[index], previous[index]);
   const xp = setXp(e.type, s);
   const level = Math.max(1, Math.round(xp / 4));
-  if (s.setType === 'warmup') return { kind: 'slime', name: 'Warm-up Slime', level, xp, elite: false, boss: false };
-  if (s.setType === 'failure') return { kind: 'dragon', name: 'Dragon of Failure', level, xp, elite: false, boss: true };
+  const base = { level, xp, elite: false, boss: false, record: false };
+  if (s.setType === 'warmup') return { ...base, kind: 'slime', name: 'Warm-up Slime' };
+  if (beatsRecord(e.type, s, records)) return { ...base, kind: 'wraith', name: 'Record Keeper', boss: true, record: true };
+  if (s.setType === 'failure') return { ...base, kind: 'dragon', name: 'Dragon of Failure', boss: true };
   const family = familyFor(e);
   const working = sets.map((x, i) => (x.setType === 'warmup' ? -1 : i)).filter((i) => i >= 0);
   const elite = working.length >= 2 && working[working.length - 1] === index;
   const nth = working.indexOf(index);
   const name = elite ? family.elite : family.names[Math.max(0, nth) % family.names.length];
-  return { kind: family.kind, name, level, xp, elite, boss: false };
+  return { ...base, kind: family.kind, name, elite };
 }
 
 // ---------- The dungeon (a live workout) ----------
@@ -276,4 +322,73 @@ export function dungeonProgress(w: ActiveWorkout): { done: number; total: number
     done += e.sets.filter((s: ActiveSet) => s.completed).length;
   }
   return { done, total };
+}
+
+// ---------- Achievements ----------
+
+export interface AchievementEntry extends StatEntry {
+  workoutId: number;
+  startedAt: number;
+}
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  /** Ionicons name. */
+  icon: string;
+  progress: number;
+  target: number;
+  unlocked: boolean;
+}
+
+const WEEK_MS = 7 * 86_400_000;
+
+/** Longest run of consecutive calendar weeks with at least one workout. */
+export function longestWeekStreak(times: number[]): number {
+  const weeks = [...new Set(times.map(startOfWeek))].sort((a, b) => a - b);
+  let best = 0;
+  let run = 0;
+  weeks.forEach((w, i) => {
+    // Rounding absorbs the hour that daylight saving adds or removes.
+    run = i > 0 && Math.round((w - weeks[i - 1]) / WEEK_MS) === 1 ? run + 1 : 1;
+    best = Math.max(best, run);
+  });
+  return best;
+}
+
+/** Badges earned from the whole history, each with progress toward it. */
+export function achievementsFrom(entries: AchievementEntry[]): Achievement[] {
+  const c = characterFrom(entries);
+  const workouts = new Map<number, number>();
+  let failures = 0;
+  let heaviest = 0;
+  let farthest = 0;
+  let stretches = 0;
+  for (const e of entries) {
+    workouts.set(e.workoutId, e.startedAt);
+    const s = e.set;
+    if (s.setType === 'warmup') continue;
+    if (s.setType === 'failure') failures++;
+    if ((e.type === 'weight_reps' || e.type === 'weighted_bodyweight') && (s.reps ?? 0) > 0) {
+      heaviest = Math.max(heaviest, s.weight ?? 0);
+    }
+    farthest = Math.max(farthest, s.distanceM ?? 0);
+    if (statShares(e).WIS) stretches++;
+  }
+  const minStat = Math.min(...STATS.map((s) => c.stats[s].value));
+  const list: Omit<Achievement, 'unlocked'>[] = [
+    { id: 'first', name: 'First Blood', description: 'Finish your first workout', icon: 'flag', progress: workouts.size, target: 1 },
+    { id: 'hunter', name: 'Monster Hunter', description: 'Slay 100 monsters', icon: 'skull', progress: c.slain, target: 100 },
+    { id: 'dragon', name: 'Dragon Slayer', description: 'Beat a Dragon of Failure (a set to failure)', icon: 'flame', progress: failures, target: 1 },
+    { id: 'streak', name: 'Iron Will', description: 'Train 4 weeks in a row', icon: 'calendar', progress: longestWeekStreak([...workouts.values()]), target: 4 },
+    { id: 'centurion', name: 'Centurion', description: 'Lift 100 kg (220 lb) in one set', icon: 'barbell', progress: heaviest, target: 100 },
+    { id: 'wanderer', name: 'Wanderer', description: 'Cover 5 km in one set', icon: 'walk', progress: farthest, target: 5000 },
+    { id: 'zen', name: 'Zen Master', description: 'Complete 50 stretching sets', icon: 'leaf', progress: stretches, target: 50 },
+    { id: 'veteran', name: 'Veteran', description: 'Reach level 10', icon: 'star', progress: c.level.level, target: 10 },
+    { id: 'balanced', name: 'Renaissance Hero', description: 'Raise every attribute to 5', icon: 'diamond', progress: minStat, target: 5 },
+    { id: 'regular', name: 'Dungeon Regular', description: 'Finish 50 workouts', icon: 'trophy', progress: workouts.size, target: 50 },
+    { id: 'legend', name: 'Legendary Slayer', description: 'Slay 1,000 monsters', icon: 'skull', progress: c.slain, target: 1000 },
+  ];
+  return list.map((a) => ({ ...a, progress: Math.min(a.progress, a.target), unlocked: a.progress >= a.target }));
 }

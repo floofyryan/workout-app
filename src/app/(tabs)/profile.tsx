@@ -3,13 +3,13 @@ import { useLayoutEffect, useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BarChart } from '@/components/Charts';
-import { CharacterSheet } from '@/components/CharacterSheet';
+import { AchievementGrid, CharacterSheet } from '@/components/CharacterSheet';
 import { Card, IconButton, ListItem, SectionTitle, Stat } from '@/components/ui';
 import { WorkoutCard } from '@/components/WorkoutCard';
 import { getStatEntries, listWorkouts, workoutCount, workoutStartTimes } from '@/db/repo';
 import { formatShortDate, startOfDay, startOfWeek } from '@/lib/format';
 import { useFocusQuery, useNow } from '@/lib/hooks';
-import { characterFrom } from '@/lib/rpg';
+import { achievementsFrom, characterFrom } from '@/lib/rpg';
 import { colors, radius, spacing } from '@/lib/theme';
 import { useSettings } from '@/state/SettingsContext';
 
@@ -30,11 +30,13 @@ export default function ProfileScreen() {
   const [data] = useFocusQuery(
     async (db) => {
       const since = startOfWeek(Date.now()) - (WEEKS * 4 - 1) * WEEK_MS;
+      const entries = settings.adventureMode ? await getStatEntries(db) : null;
       return {
         total: await workoutCount(db),
         starts: await workoutStartTimes(db, since),
         recent: await listWorkouts(db, 1),
-        character: settings.adventureMode ? characterFrom(await getStatEntries(db)) : null,
+        character: entries ? characterFrom(entries) : null,
+        achievements: entries ? achievementsFrom(entries) : null,
       };
     },
     [settings.adventureMode],
@@ -70,6 +72,14 @@ export default function ProfileScreen() {
         <>
           <SectionTitle>Character</SectionTitle>
           <CharacterSheet character={data.character} />
+          {data.achievements && (
+            <>
+              <SectionTitle>
+                {`Achievements ${data.achievements.filter((a) => a.unlocked).length}/${data.achievements.length}`}
+              </SectionTitle>
+              <AchievementGrid achievements={data.achievements} />
+            </>
+          )}
           <SectionTitle>Training</SectionTitle>
         </>
       )}
