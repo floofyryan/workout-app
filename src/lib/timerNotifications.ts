@@ -1,3 +1,4 @@
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
@@ -5,7 +6,13 @@ import { Platform } from 'react-native';
 // screen is locked or the app is in the background. While the app is open the in-app vibration
 // and timer bars do the job, so notifications are suppressed in the foreground.
 
-const CHANNEL_ID = 'workout-timers';
+// The ding is bundled into the app by the expo-notifications plugin (see app.json), so it only
+// exists in a real build; Expo Go falls back to the system sound.
+const HAS_DING = Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
+const DING = 'ding.wav';
+// Android fixes a channel's sound when it is created, so the ding gets its own channel.
+const OLD_CHANNEL_ID = 'workout-timers';
+const CHANNEL_ID = HAS_DING ? 'workout-timers-ding' : OLD_CHANNEL_ID;
 let ready: Promise<boolean> | null = null;
 
 /** Sets up the handler and Android channel and asks for permission (once). */
@@ -25,10 +32,11 @@ export function setupTimerNotifications(): Promise<boolean> {
         await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
           name: 'Workout timers',
           importance: Notifications.AndroidImportance.HIGH,
-          // No `sound` here: Android treats a name as a bundled sound file, and the channel
-          // plays the system default without one.
+          // Without `sound` the channel plays the system default; a name means a bundled file.
           vibrationPattern: [0, 400, 200, 400],
+          ...(HAS_DING ? { sound: DING } : null),
         });
+        if (HAS_DING) await Notifications.deleteNotificationChannelAsync(OLD_CHANNEL_ID).catch(() => {});
       }
       const current = await Notifications.getPermissionsAsync();
       if (current.granted) return true;
@@ -45,7 +53,7 @@ export async function scheduleTimerNotification(at: number, title: string, body:
   if (at <= Date.now() || !(await setupTimerNotifications())) return null;
   try {
     return await Notifications.scheduleNotificationAsync({
-      content: { title, body, sound: 'default' },
+      content: { title, body, sound: HAS_DING ? DING : 'default' },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at, channelId: CHANNEL_ID },
     });
   } catch {

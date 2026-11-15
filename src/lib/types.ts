@@ -174,6 +174,8 @@ export interface Settings {
   /** Available plates (per side) in the user's display unit. */
   plates: number[];
   vibrateOnRestEnd: boolean;
+  /** Tick on the last seconds of the rest and hold timers, and ding when they end. */
+  timerSounds: boolean;
   keepScreenOn: boolean;
   /** Notify when rest/hold timers end while the app is in the background or the screen is off. */
   timerNotifications: boolean;

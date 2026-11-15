@@ -26,7 +26,12 @@
     "plugins": [
       "expo-router",
       "expo-sqlite",
-      "expo-notifications"
+      [
+        "expo-notifications",
+        {
+          "sounds": ["./assets/sounds/ding.wav"]
+        }
+      ]
     ]
   }
 }

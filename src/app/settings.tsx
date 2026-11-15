@@ -139,6 +139,10 @@ export default function SettingsScreen() {
           <Switch value={settings.vibrateOnRestEnd} onValueChange={(v) => updateSettings({ vibrateOnRestEnd: v })} />
         </View>
         <View style={styles.switchRow}>
+          <Text style={[styles.text, { flex: 1, marginRight: spacing.md }]}>Tick and ding at the end of timers</Text>
+          <Switch value={settings.timerSounds} onValueChange={(v) => updateSettings({ timerSounds: v })} />
+        </View>
+        <View style={styles.switchRow}>
           <Text style={styles.text}>Keep screen on during workouts</Text>
           <Switch value={settings.keepScreenOn} onValueChange={(v) => updateSettings({ keepScreenOn: v })} />
         </View>
