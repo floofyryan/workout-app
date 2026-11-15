@@ -179,6 +179,8 @@ export interface Settings {
   timerNotifications: boolean;
   /** Which figure the exercise body map shows. */
   bodyMapFigure: 'goblin' | 'male' | 'female';
+  /** RPG flavour: XP, levels, a character sheet and monsters to fight during workouts. */
+  adventureMode: boolean;
 }
 
 export const MEASUREMENT_TYPES = [

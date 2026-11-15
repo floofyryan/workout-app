@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { computeRecords, type Records } from '../lib/calc';
 import { guessExercise } from '../lib/exerciseGuess';
+import type { StatEntry } from '../lib/rpg';
 import type { ImportedWorkout } from '../lib/strongCsv';
 import type {
   BodyPart,
@@ -142,6 +143,7 @@ export const DEFAULT_SETTINGS: Settings = {
   keepScreenOn: true,
   timerNotifications: true,
   bodyMapFigure: 'goblin',
+  adventureMode: true,
 };
 
 export const DEFAULT_IMPERIAL_PLATES = [45, 35, 25, 10, 5, 2.5];
@@ -608,6 +610,28 @@ export async function getRecordsBefore(
   );
   if (rows.length === 0) return null;
   return computeRecords(exercise.type, rows.map(toSet));
+}
+
+/**
+ * Every logged set with its exercise's type, body part and category (for adventure-mode XP and
+ * attributes), from workouts started before `before`.
+ */
+export async function getStatEntries(db: SQLiteDatabase, before = Number.MAX_SAFE_INTEGER): Promise<StatEntry[]> {
+  const rows = await db.getAllAsync<SetRow & { type: string; body_part: string; category: string | null }>(
+    `SELECT s.set_type, s.weight, s.reps, s.duration_s, s.distance_m, s.rpe, e.type, e.body_part, e.category
+     FROM workout_sets s
+     JOIN workout_exercises we ON we.id = s.workout_exercise_id
+     JOIN workouts w ON w.id = we.workout_id
+     JOIN exercises e ON e.id = we.exercise_id
+     WHERE w.started_at < ?`,
+    before,
+  );
+  return rows.map((r) => ({
+    type: r.type as ExerciseType,
+    bodyPart: r.body_part as BodyPart,
+    category: r.category,
+    set: toSet(r),
+  }));
 }
 
 // ---------- Measurements ----------

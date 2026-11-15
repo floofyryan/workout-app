@@ -8,16 +8,45 @@ import { ActionSheet } from '@/components/Sheets';
 import { supersetColors } from '@/components/WorkoutEditor';
 import { Card, IconButton, Stat } from '@/components/ui';
 import { workoutVolume } from '@/components/WorkoutCard';
-import { deleteWorkout, getRecordsBefore, getWorkout, saveTemplate } from '@/db/repo';
+import { MonsterSprite } from '@/components/RpgSprites';
+import { deleteWorkout, getRecordsBefore, getStatEntries, getWorkout, saveTemplate } from '@/db/repo';
 import { computeRecords, estimate1RM, newRecords, RECORD_LABELS, type RecordKey } from '@/lib/calc';
 import { formatDate, formatDuration, formatNumber, formatTime } from '@/lib/format';
 import { useFocusQuery } from '@/lib/hooks';
+import { characterFrom, STAT_INFO, STATS, type Stat as Attribute } from '@/lib/rpg';
 import { formatSet, SET_TYPE_LABEL } from '@/lib/setFormat';
 import { colors, radius, spacing } from '@/lib/theme';
 import { exerciseCategory, type Template, type WorkoutDetail } from '@/lib/types';
 import { formatWeight, kgToDisplay, weightUnit } from '@/lib/units';
 import { useActiveWorkout } from '@/state/ActiveWorkoutContext';
 import { useSettings } from '@/state/SettingsContext';
+
+interface QuestReward {
+  xp: number;
+  slain: number;
+  levelBefore: number;
+  levelAfter: number;
+  title: string;
+  gains: { stat: Attribute; to: number }[];
+}
+
+/** XP, kills, level-ups and attribute gains from one workout, against everything done before it. */
+async function questReward(db: Parameters<typeof getStatEntries>[0], w: WorkoutDetail): Promise<QuestReward> {
+  const before = await getStatEntries(db, w.startedAt);
+  const own = w.exercises.flatMap((e) =>
+    e.sets.map((set) => ({ type: e.exercise.type, bodyPart: e.exercise.bodyPart, category: e.exercise.category, set })),
+  );
+  const a = characterFrom(before);
+  const b = characterFrom([...before, ...own]);
+  return {
+    xp: b.xp - a.xp,
+    slain: b.slain - a.slain,
+    levelBefore: a.level.level,
+    levelAfter: b.level.level,
+    title: b.title,
+    gains: STATS.filter((s) => b.stats[s].value > a.stats[s].value).map((stat) => ({ stat, to: b.stats[stat].value })),
+  };
+}
 
 /** Converts a finished workout into an unsaved template (for "repeat" and "save as template"). */
 function asTemplate(w: WorkoutDetail): Omit<Template, 'id' | 'lastUsedAt'> {
@@ -53,9 +82,10 @@ export default function WorkoutDetailScreen() {
           prs.set(e.id, newRecords(e.exercise.type, before, computeRecords(e.exercise.type, e.sets)));
         }
       }
-      return { workout, prs };
+      const reward = workout && settings.adventureMode ? await questReward(db, workout) : null;
+      return { workout, prs, reward };
     },
-    [id],
+    [id, settings.adventureMode],
   );
   const w = data?.workout;
   const units = settings.units;
@@ -96,7 +126,7 @@ export default function WorkoutDetailScreen() {
           headerRight: () => <IconButton name="ellipsis-horizontal" color={colors.primary} onPress={() => setMenu(true)} />,
         }}
       />
-      {summary && (
+      {summary && !data.reward && (
         <View style={styles.banner}>
           <Ionicons name="trophy" size={28} color={colors.warning} />
           <View style={{ marginLeft: spacing.md, flex: 1 }}>
@@ -107,6 +137,7 @@ export default function WorkoutDetailScreen() {
           </View>
         </View>
       )}
+      {data.reward && <QuestRewardCard reward={data.reward} summary={!!summary} prs={totalPrs} />}
       <Text style={styles.title}>{w.name}</Text>
       <Text style={styles.muted}>
         {formatDate(w.startedAt)} · {formatTime(w.startedAt)} – {formatTime(w.endedAt)}
@@ -203,7 +234,67 @@ export default function WorkoutDetailScreen() {
   );
 }
 
+function QuestRewardCard({ reward: r, summary, prs }: { reward: QuestReward; summary: boolean; prs: number }) {
+  const levelUp = r.levelAfter > r.levelBefore;
+  return (
+    <View style={styles.quest}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <MonsterSprite kind={levelUp ? 'dragon' : 'goblin'} elite size={56} />
+        <View style={{ marginLeft: spacing.md, flex: 1 }}>
+          <Text style={styles.questKicker}>{summary ? 'Dungeon cleared' : 'Quest log'}</Text>
+          <Text style={styles.bannerTitle}>
+            +{r.xp} XP · {r.slain} monster{r.slain === 1 ? '' : 's'} slain
+          </Text>
+          {prs > 0 ? (
+            <Text style={styles.bannerText}>
+              {prs} personal record{prs === 1 ? '' : 's'} — legendary loot!
+            </Text>
+          ) : null}
+        </View>
+      </View>
+      {levelUp && (
+        <View style={styles.levelUp}>
+          <Ionicons name="arrow-up-circle" size={18} color={colors.warning} />
+          <Text style={styles.levelUpText}>
+            Level up! {r.levelBefore} → {r.levelAfter} · {r.title}
+          </Text>
+        </View>
+      )}
+      {r.gains.length > 0 && (
+        <View style={styles.prRow}>
+          {r.gains.map((g) => (
+            <View key={g.stat} style={[styles.prChip, { backgroundColor: 'rgba(255,255,255,0.06)' }]}>
+              <Text style={[styles.prText, { color: STAT_INFO[g.stat].color }]}>
+                {g.stat} ↑ {g.to}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  quest: {
+    backgroundColor: 'rgba(245,158,11,0.10)',
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.35)',
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  questKicker: { color: colors.warning, fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8 },
+  levelUp: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.sm,
+    backgroundColor: 'rgba(245,158,11,0.15)',
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  levelUpText: { color: colors.text, fontWeight: '700', flex: 1 },
   content: { padding: spacing.lg, paddingBottom: 60 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   banner: {

@@ -11,6 +11,7 @@ import {
   getPreviousSets,
   getRecordsBefore,
   getSettings,
+  getStatEntries,
   getTemplate,
   getWorkout,
   importWorkouts,
@@ -229,6 +230,12 @@ describe('workouts', () => {
       assert.ok(records);
       assert.equal(records.maxWeight, 70);
       assert.equal(await getRecordsBefore(db, bench, 1_000), null);
+
+      const entries = await getStatEntries(db, 3_000);
+      assert.deepEqual(entries.map((e) => e.set.weight).sort(), [60, 70]);
+      assert.equal(entries[0].bodyPart, 'Chest');
+      assert.equal(entries[0].type, 'weight_reps');
+      assert.equal((await getStatEntries(db)).length, 3);
     }));
 
   test('importing the same workouts twice skips duplicates and creates unknown exercises once', () =>

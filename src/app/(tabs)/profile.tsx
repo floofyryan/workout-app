@@ -3,11 +3,13 @@ import { useLayoutEffect, useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BarChart } from '@/components/Charts';
+import { CharacterSheet } from '@/components/CharacterSheet';
 import { Card, IconButton, ListItem, SectionTitle, Stat } from '@/components/ui';
 import { WorkoutCard } from '@/components/WorkoutCard';
-import { listWorkouts, workoutCount, workoutStartTimes } from '@/db/repo';
+import { getStatEntries, listWorkouts, workoutCount, workoutStartTimes } from '@/db/repo';
 import { formatShortDate, startOfDay, startOfWeek } from '@/lib/format';
 import { useFocusQuery, useNow } from '@/lib/hooks';
+import { characterFrom } from '@/lib/rpg';
 import { colors, radius, spacing } from '@/lib/theme';
 import { useSettings } from '@/state/SettingsContext';
 
@@ -25,14 +27,18 @@ export default function ProfileScreen() {
     });
   }, [navigation]);
 
-  const [data] = useFocusQuery(async (db) => {
-    const since = startOfWeek(Date.now()) - (WEEKS * 4 - 1) * WEEK_MS;
-    return {
-      total: await workoutCount(db),
-      starts: await workoutStartTimes(db, since),
-      recent: await listWorkouts(db, 1),
-    };
-  });
+  const [data] = useFocusQuery(
+    async (db) => {
+      const since = startOfWeek(Date.now()) - (WEEKS * 4 - 1) * WEEK_MS;
+      return {
+        total: await workoutCount(db),
+        starts: await workoutStartTimes(db, since),
+        recent: await listWorkouts(db, 1),
+        character: settings.adventureMode ? characterFrom(await getStatEntries(db)) : null,
+      };
+    },
+    [settings.adventureMode],
+  );
 
   const now = useNow(60_000);
   const stats = useMemo(() => {
@@ -60,6 +66,13 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
+      {data?.character && (
+        <>
+          <SectionTitle>Character</SectionTitle>
+          <CharacterSheet character={data.character} />
+          <SectionTitle>Training</SectionTitle>
+        </>
+      )}
       <Card style={{ flexDirection: 'row' }}>
         <Stat label="Workouts" value={String(data?.total ?? 0)} />
         <Stat label="This week" value={String(stats.thisWeek)} />

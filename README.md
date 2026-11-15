@@ -31,6 +31,19 @@ in SQLite.
   - Finishing offers to update the template if you changed its exercises or sets, or lifted different
     weights / reps, so next time it starts filled in with what you did.
   - The template and past-workout editors ask before throwing away unsaved changes.
+- **Adventure mode** (on by default, can be turned off in Settings) – RPG flavour on top of the log:
+  - The live workout is a **dungeon**: a little knight fights one monster per set, and ticking a set
+    off slays it (sword slash, +XP). The dungeon guide says which room (exercise or superset), set and
+    target is next, counts down rest ("… attacks in 1:12") and drains the monster's HP during holds.
+  - Monsters depend on the exercise: golems for pushing, goblins for pulling, ogres for legs,
+    skeletons for core and stretching, bats for cardio, slimes for warm-ups, a crowned elite for the
+    last working set and a dragon for sets to failure. Clear every room to reach the treasure chest.
+  - Every set earns **XP** (more for heavier, longer or harder sets) toward a character **level**, and
+    trains one of five attributes: **STR** (upper body), **CON** (legs), **DEX** (core, plyo, Olympic
+    lifts), **STA** (cardio) and **WIS** (stretching). Your highest attribute sets your class
+    (Barbarian, Juggernaut, Rogue, Ranger, Monk) and your level your rank (Novice → Legendary).
+  - Profile shows the character sheet; the finished-workout screen shows XP earned, monsters slain,
+    level-ups and attribute gains. It's all derived from your history, so imported workouts count too.
 - **Tracking types** – weight & reps, reps only, weighted bodyweight (+kg), assisted bodyweight
   (−kg), duration, distance & duration.
 - **History** – workouts grouped by month with "Exercise | Best set" summaries; open one to see

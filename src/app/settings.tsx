@@ -146,6 +146,10 @@ export default function SettingsScreen() {
           <Text style={[styles.text, { flex: 1, marginRight: spacing.md }]}>Timer alerts when the screen is off</Text>
           <Switch value={settings.timerNotifications} onValueChange={(v) => updateSettings({ timerNotifications: v })} />
         </View>
+        <View style={styles.switchRow}>
+          <Text style={[styles.text, { flex: 1, marginRight: spacing.md }]}>Adventure mode (XP, monsters & character)</Text>
+          <Switch value={settings.adventureMode} onValueChange={(v) => updateSettings({ adventureMode: v })} />
+        </View>
       </Card>
 
       <SectionTitle>Plate calculator</SectionTitle>

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DungeonBattle } from '@/components/DungeonBattle';
 import { RestTimerBar } from '@/components/RestTimerBar';
 import { SetTimerBar } from '@/components/SetTimerBar';
 import { WorkoutEditor } from '@/components/WorkoutEditor';
@@ -124,6 +125,7 @@ export default function ActiveWorkoutScreen() {
       </View>
       <SetTimerBar />
       <RestTimerBar />
+      {settings.adventureMode && <DungeonBattle workout={workout} units={settings.units} />}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <WorkoutEditor
