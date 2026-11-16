@@ -24,6 +24,7 @@ import {
 } from '@/lib/activeWorkout';
 import { defaultWorkoutName } from '@/lib/format';
 import { cancelTimerNotification, scheduleTimerNotification } from '@/lib/timerNotifications';
+import { playTimerSound, preloadTimerSounds } from '@/lib/timerSounds';
 import type { Exercise, SetData, Template } from '@/lib/types';
 import { useSettings } from './SettingsContext';
 
@@ -161,11 +162,18 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
       setRestTimer(null);
       restNotif.current = null;
       if (Date.now() - restTimer.endsAt > 2000) return;
+      if (settings.timerSounds) playTimerSound('rest');
       if (settings.vibrateOnRestEnd) Vibration.vibrate([0, 400, 200, 400]);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     }, Math.max(0, ms));
     return () => clearTimeout(t);
-  }, [restTimer, settings.vibrateOnRestEnd]);
+  }, [restTimer, settings.vibrateOnRestEnd, settings.timerSounds]);
+
+  // Load the beeps once a workout is under way, so the first one plays on time.
+  const hasWorkout = workout != null;
+  useEffect(() => {
+    if (hasWorkout && settings.timerSounds) preloadTimerSounds();
+  }, [hasWorkout, settings.timerSounds]);
 
   /** Schedules the "rest over" notification, keeping one already scheduled for the same moment. */
   const scheduleRestNotification = useCallback(
@@ -264,6 +272,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         updateSetIn(cur, timer.exerciseKey, timer.setKey, { durationS: Math.max(1, Math.round(seconds)), completed: true }),
       );
       if (!natural || Date.now() - timer.endsAt < 2000) {
+        if (settings.timerSounds && natural) playTimerSound('hold');
         if (settings.vibrateOnRestEnd) Vibration.vibrate([0, 300, 150, 300]);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       }
@@ -273,7 +282,7 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         cancelRestNotification();
       }
     },
-    [cancelHoldNotification, cancelRestNotification, restSecondsFor, settings.vibrateOnRestEnd, startRest, update],
+    [cancelHoldNotification, cancelRestNotification, restSecondsFor, settings.timerSounds, settings.vibrateOnRestEnd, startRest, update],
   );
 
   /** Schedules the hold-finished notification and the rest-over one that follows it. */
