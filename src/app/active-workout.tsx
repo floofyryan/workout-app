@@ -91,13 +91,18 @@ export default function ActiveWorkoutScreen() {
             'Keep as is',
           );
           if (updateTemplate) {
-            await saveTemplate(db, template.id, {
-              name: template.name,
-              notes: template.notes,
-              kind: template.kind,
-              folder: template.folder,
-              exercises: templateExercisesFromWorkout(workout),
-            });
+            try {
+              await saveTemplate(db, template.id, {
+                name: template.name,
+                notes: template.notes,
+                kind: template.kind,
+                folder: template.folder,
+                exercises: templateExercisesFromWorkout(workout),
+              });
+            } catch (e) {
+              // Don't let a template problem stop the workout itself from being saved.
+              Alert.alert('Could not update the template', `Your workout will still be saved.\n\n${String(e)}`);
+            }
           }
         }
       }
