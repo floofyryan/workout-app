@@ -88,3 +88,16 @@ export function parseNumber(text: string): number | null {
   const n = Number(t);
   return Number.isFinite(n) ? n : null;
 }
+
+/**
+ * `name` if no existing name matches it (ignoring case), otherwise the first free
+ * "name (1)", "name (2)", … — so generating the same program twice doesn't make lookalikes.
+ */
+export function uniqueName(name: string, taken: Iterable<string>): string {
+  const used = new Set([...taken].map((n) => n.trim().toLowerCase()));
+  if (!used.has(name.trim().toLowerCase())) return name;
+  for (let n = 1; ; n++) {
+    const candidate = `${name} (${n})`;
+    if (!used.has(candidate.toLowerCase())) return candidate;
+  }
+}

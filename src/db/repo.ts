@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { computeRecords, type Records } from '../lib/calc';
 import { guessExercise } from '../lib/exerciseGuess';
+import { uniqueName } from '../lib/format';
 import type { GeneratedProgram } from '../lib/generator';
 import type { PlanEntry, PlanWorkout } from '../lib/plan';
 import type { AchievementEntry } from '../lib/rpg';
@@ -459,10 +460,14 @@ export async function saveGeneratedProgram(
   { folder, replacePlan }: { folder: string; replacePlan: boolean },
 ): Promise<number[]> {
   const ids: number[] = [];
+  const taken = (await db.getAllAsync<{ name: string }>('SELECT name FROM templates')).map((r) => r.name);
   for (const w of program.workouts) {
+    // "Upper A" again becomes "Upper A (1)", then "(2)", … instead of another identical template.
+    const name = uniqueName(w.name, taken);
+    taken.push(name);
     ids.push(
       await saveTemplate(db, null, {
-        name: w.name,
+        name,
         notes: `Generated ${program.name} program.`,
         kind: 'workout',
         folder,

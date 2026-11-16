@@ -19,7 +19,8 @@ in SQLite.
   bodyweight), your training days and goal (strength, muscle, general fitness), and it builds a
   full-body, upper/lower or push/pull/legs program from the curated exercise library, with sets,
   reps and rest times. Shuffle for different exercises, then save it as templates in a folder and,
-  optionally, as your weekly plan.
+  optionally, as your weekly plan. Saving again doesn't make lookalikes: if "Upper A" already
+  exists, the new one is "Upper A (1)", then "Upper A (2)", and so on.
 - **Live workout** – elapsed timer, editable name and notes, and per exercise a
   `SET | PREVIOUS | KG | REPS | ✓` grid:
   - "Previous" shows what you did last time; tap it to copy those values. Ticking a set with blank

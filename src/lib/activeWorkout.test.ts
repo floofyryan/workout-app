@@ -17,7 +17,7 @@ import {
   workoutFromTemplate,
   type ActiveWorkout,
 } from './activeWorkout';
-import { formatClock, formatDuration, parseClock, parseNumber } from './format';
+import { formatClock, formatDuration, parseClock, parseNumber, uniqueName } from './format';
 import type { Template } from './types';
 
 const template: Template = {
@@ -129,4 +129,13 @@ describe('format helpers', () => {
     assert.equal(parseNumber('62,5'), 62.5);
     assert.equal(parseNumber(''), null);
   });
+});
+
+describe('uniqueName', () => {
+  it('keeps a free name', () => assert.equal(uniqueName('Upper A', ['Lower A']), 'Upper A'));
+  it('numbers a taken name, ignoring case', () => {
+    assert.equal(uniqueName('Upper A', ['upper a']), 'Upper A (1)');
+    assert.equal(uniqueName('Upper A', ['Upper A', 'Upper A (1)']), 'Upper A (2)');
+  });
+  it('fills gaps', () => assert.equal(uniqueName('Upper A', ['Upper A', 'Upper A (2)']), 'Upper A (1)'));
 });

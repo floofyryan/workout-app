@@ -385,11 +385,23 @@ describe('weekly plan', () => {
       const ids = await saveGeneratedProgram(db, program, { folder: 'PPL (generated)', replacePlan: true });
       assert.equal(ids.length, 3);
       const push = await getTemplate(db, ids[0]);
-      assert.equal(push?.name, 'Push');
+      // The starter templates already include a "Push".
+      assert.equal(push?.name, 'Push (1)');
       assert.equal(push?.folder, 'PPL (generated)');
       assert.equal(push?.exercises.length, program.workouts[0].exercises.length);
       assert.ok(!('name' in (push?.exercises[0] ?? {})));
       assert.deepEqual((await getPlan(db)).map((p) => p.templateId), [...ids, ...ids]);
+
+      // Generating again numbers the new templates instead of duplicating the names.
+      const again = await saveGeneratedProgram(db, program, { folder: 'PPL (generated)', replacePlan: false });
+      assert.equal((await getTemplate(db, again[0]))?.name, 'Push (2)');
+      const third = await saveGeneratedProgram(db, program, { folder: 'PPL (generated)', replacePlan: false });
+      assert.equal((await getTemplate(db, third[0]))?.name, 'Push (3)');
+      assert.equal((await getTemplate(db, third[1]))?.name, 'Pull (3)');
+      // A deleted name is free again.
+      await deleteTemplate(db, ids[0]);
+      const fourth = await saveGeneratedProgram(db, program, { folder: 'PPL (generated)', replacePlan: false });
+      assert.equal((await getTemplate(db, fourth[0]))?.name, 'Push (1)');
     }));
 
   test('workoutsBetween returns start times and templates in a range', () =>
