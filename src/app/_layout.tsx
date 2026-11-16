@@ -56,6 +56,8 @@ export default function RootLayout() {
                   <Stack.Screen name="workout-edit/[id]" options={{ title: 'Edit Workout' }} />
                   <Stack.Screen name="template/[id]" options={{ title: 'Template' }} />
                   <Stack.Screen name="measurement/[type]" options={{ title: '' }} />
+                  <Stack.Screen name="plan" options={{ title: 'Weekly Plan' }} />
+                  <Stack.Screen name="generate" options={{ title: 'Generate Program' }} />
                   <Stack.Screen name="settings" options={{ title: 'Settings' }} />
                   <Stack.Screen name="bestiary" options={{ title: 'Bestiary' }} />
                   <Stack.Screen name="tools/plates" options={{ title: 'Plate Calculator' }} />

@@ -2,6 +2,8 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { computeRecords, type Records } from '../lib/calc';
 import { guessExercise } from '../lib/exerciseGuess';
+import type { GeneratedProgram } from '../lib/generator';
+import type { PlanEntry, PlanWorkout } from '../lib/plan';
 import type { AchievementEntry } from '../lib/rpg';
 import type { ImportedWorkout } from '../lib/strongCsv';
 import type {
@@ -407,6 +409,83 @@ export async function markTemplateUsed(db: SQLiteDatabase, id: number, ts: numbe
   await db.runAsync('UPDATE templates SET last_used_at = ? WHERE id = ?', ts, id);
 }
 
+// ---------- Weekly plan ----------
+
+/** Every scheduled template, ordered by weekday (0 = Monday) then position within the day. */
+export async function getPlan(db: SQLiteDatabase): Promise<PlanEntry[]> {
+  const rows = await db.getAllAsync<{ weekday: number; template_id: number }>(
+    'SELECT weekday, template_id FROM plan_days ORDER BY weekday, position, id',
+  );
+  return rows.map((r) => ({ weekday: r.weekday, templateId: r.template_id }));
+}
+
+/** When the current plan was set up; days before it aren't counted as missed. */
+export async function getPlanStart(db: SQLiteDatabase): Promise<number | null> {
+  const v = Number(await getKv(db, 'planStartedAt'));
+  return Number.isFinite(v) && v > 0 ? v : null;
+}
+
+/**
+ * Replaces the whole weekly plan. Entries keep their order within each day. Starting a plan from
+ * nothing (or with `restart`) resets the date it counts from.
+ */
+export async function savePlan(db: SQLiteDatabase, entries: PlanEntry[], { restart = false } = {}) {
+  await db.withTransactionAsync(async () => {
+    const existing = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM plan_days');
+    if (restart || !existing?.n) await setKv(db, 'planStartedAt', String(Date.now()));
+    await db.runAsync('DELETE FROM plan_days');
+    const positions = new Map<number, number>();
+    for (const e of entries) {
+      if (!Number.isInteger(e.weekday) || e.weekday < 0 || e.weekday > 6) continue;
+      const position = positions.get(e.weekday) ?? 0;
+      positions.set(e.weekday, position + 1);
+      await db.runAsync(
+        'INSERT INTO plan_days (weekday, template_id, position) VALUES (?, ?, ?)',
+        e.weekday,
+        e.templateId,
+        position,
+      );
+    }
+  });
+}
+
+/**
+ * Saves a generated program as workout templates in one folder. With `replacePlan`, the weekly plan
+ * becomes the program's schedule. Returns the new template ids.
+ */
+export async function saveGeneratedProgram(
+  db: SQLiteDatabase,
+  program: GeneratedProgram,
+  { folder, replacePlan }: { folder: string; replacePlan: boolean },
+): Promise<number[]> {
+  const ids: number[] = [];
+  for (const w of program.workouts) {
+    ids.push(
+      await saveTemplate(db, null, {
+        name: w.name,
+        notes: `Generated ${program.name} program.`,
+        kind: 'workout',
+        folder,
+        exercises: w.exercises.map(({ name: _name, ...e }) => e),
+      }),
+    );
+  }
+  if (replacePlan) {
+    await savePlan(db, program.schedule.map((s) => ({ weekday: s.weekday, templateId: ids[s.workout] })), { restart: true });
+  }
+  return ids;
+}
+
+/** Start time and template of each workout started in [from, to). */
+export async function workoutsBetween(db: SQLiteDatabase, from: number, to: number): Promise<PlanWorkout[]> {
+  const rows = await db.getAllAsync<{ started_at: number; template_id: number | null }>(
+    'SELECT started_at, template_id FROM workouts WHERE started_at >= ? AND started_at < ? ORDER BY started_at',
+    from,
+    to,
+  );
+  return rows.map((r) => ({ startedAt: r.started_at, templateId: r.template_id }));
+}
+
 // ---------- Workouts ----------
 
 export interface WorkoutInput {
@@ -782,6 +861,7 @@ const BACKUP_TABLES = [
   'exercises',
   'templates',
   'template_exercises',
+  'plan_days',
   'workouts',
   'workout_exercises',
   'workout_sets',

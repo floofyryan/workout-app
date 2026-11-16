@@ -35,7 +35,8 @@
           "enableBackgroundPlayback": false
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "./plugins/withGradleMemory"
     ]
   }
 }

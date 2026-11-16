@@ -11,6 +11,15 @@ in SQLite.
   **Workout templates** and **Stretch routines** (two starter stretch routines included); cards show
   their exercises and when they were last performed; duplicate, edit or delete them, group them into
   **folders** (e.g. "PPL", "Mobility") and drag them into any order.
+- **Weekly plan** – schedule templates on the days you train (Workout tab → Plan). The Workout tab
+  shows "This week" with a day strip (done / missed / upcoming, plus unplanned extras) and a one-tap
+  start for today's workout. Doing a planned workout on another day still ticks it off; days from
+  before the plan was set up don't count as missed. Copy a day to another, or clear the plan.
+- **Program generator** – tick the equipment you have (presets for full gym, home gym, dumbbells,
+  bodyweight), your training days and goal (strength, muscle, general fitness), and it builds a
+  full-body, upper/lower or push/pull/legs program from the curated exercise library, with sets,
+  reps and rest times. Shuffle for different exercises, then save it as templates in a folder and,
+  optionally, as your weekly plan.
 - **Live workout** – elapsed timer, editable name and notes, and per exercise a
   `SET | PREVIOUS | KG | REPS | ✓` grid:
   - "Previous" shows what you did last time; tap it to copy those values. Ticking a set with blank
@@ -92,6 +101,14 @@ npm start          # scan the QR code with Expo Go
 npm run android    # or open in an Android emulator
 ```
 
+## Installing on your phone (Windows, one click)
+
+With Android Studio installed and your phone connected (USB debugging, or paired over Wi-Fi in
+Android Studio → Device Manager), double-click **`build-phone.bat`**. It pulls the latest code,
+installs packages, generates the Android project and installs a release build on the phone. The
+`plugins/withGradleMemory.js` config plugin gives Gradle enough memory for this, so the generated
+`android/` folder never needs editing.
+
 ## Building an APK
 
 Builds run in the cloud with EAS — no Android Studio needed:
@@ -119,6 +136,7 @@ src/app/            Expo Router screens (files are routes)
   active-workout    Live workout screen
   workout/[id]      Workout details / summary, workout-edit/[id] to edit
   template/[id]     Template editor ("new" to create)
+  plan, generate    Weekly plan editor and program generator
   exercise/[id]     Exercise About / History / Charts / Records
 src/components/     Shared UI (WorkoutEditor set grid, charts, sheets, inputs)
 src/db/             SQLite schema/migrations (schema.ts), queries (repo.ts), test database (testDb.ts)

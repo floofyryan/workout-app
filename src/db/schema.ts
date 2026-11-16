@@ -165,6 +165,18 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
       ALTER TABLE templates ADD COLUMN folder TEXT;
     `);
   },
+  // v6: weekly plan — templates scheduled on days of the week (0 = Monday … 6 = Sunday).
+  async (db) => {
+    await db.execAsync(`
+      CREATE TABLE plan_days (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        weekday INTEGER NOT NULL,
+        template_id INTEGER NOT NULL REFERENCES templates(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX idx_plan_days_weekday ON plan_days(weekday, position);
+    `);
+  },
 ];
 
 async function importFreeExerciseDb(db: SQLiteDatabase) {

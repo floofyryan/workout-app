@@ -8,9 +8,20 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { ActionSheet, PromptModal } from '@/components/Sheets';
 import { ReorderSheet } from '@/components/Sortable';
 import { Button, Card, SectionTitle } from '@/components/ui';
-import { deleteTemplate, duplicateTemplate, listTemplates, reorderTemplates, setTemplateFolder } from '@/db/repo';
-import { formatClock } from '@/lib/format';
+import { WeekPlanCard } from '@/components/WeekPlanCard';
+import {
+  deleteTemplate,
+  duplicateTemplate,
+  getPlan,
+  getPlanStart,
+  listTemplates,
+  reorderTemplates,
+  setTemplateFolder,
+  workoutsBetween,
+} from '@/db/repo';
+import { formatClock, startOfWeek } from '@/lib/format';
 import { useExerciseMap, useFocusQuery } from '@/lib/hooks';
+import { buildWeek } from '@/lib/plan';
 import { colors, spacing } from '@/lib/theme';
 import type { Exercise, Template, TemplateKind } from '@/lib/types';
 import { useActiveWorkout } from '@/state/ActiveWorkoutContext';
@@ -27,6 +38,16 @@ export default function StartWorkoutScreen() {
   const db = useSQLiteContext();
   const { workout, start } = useActiveWorkout();
   const [templates, reload] = useFocusQuery(listTemplates);
+  const [week, reloadWeek] = useFocusQuery(async (d) => {
+    const now = Date.now();
+    const from = startOfWeek(now);
+    const [plan, start, workouts] = await Promise.all([
+      getPlan(d),
+      getPlanStart(d),
+      workoutsBetween(d, from, from + 8 * 86_400_000),
+    ]);
+    return buildWeek(plan, workouts, now, start);
+  });
   const [selected, setSelected] = useState<Template | null>(null);
   const [folderFor, setFolderFor] = useState<Template | null>(null);
   const [reorderKind, setReorderKind] = useState<TemplateKind | null>(null);
@@ -53,7 +74,19 @@ export default function StartWorkoutScreen() {
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.container}>
-      <SectionTitle>Quick start</SectionTitle>
+      <SectionTitle
+        right={
+          <View style={{ flexDirection: 'row' }}>
+            <Button title="Generate" icon="sparkles-outline" small variant="ghost" onPress={() => router.push('/generate')} />
+            <Button title="Plan" icon="calendar-outline" small variant="ghost" onPress={() => router.push('/plan')} />
+          </View>
+        }
+      >
+        Quick start
+      </SectionTitle>
+      {week && templates && (
+        <WeekPlanCard week={week} templates={new Map(templates.map((t) => [t.id, t]))} onStart={begin} />
+      )}
       <Button title={workout ? 'Resume Workout' : 'Start an Empty Workout'} onPress={() => (workout ? router.push('/active-workout') : begin())} />
 
       <TemplateSection
@@ -136,6 +169,7 @@ export default function StartWorkoutScreen() {
                         onPress: async () => {
                           await deleteTemplate(db, selected.id);
                           reload();
+                          reloadWeek();
                         },
                       },
                     ]),
