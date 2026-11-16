@@ -5,6 +5,7 @@ import { describe, test } from 'node:test';
 import type { SetData } from '../lib/types';
 import {
   addMeasurement,
+  deleteTemplate,
   duplicateTemplate,
   exportBackup,
   findExerciseByName,
@@ -195,6 +196,28 @@ describe('workouts', () => {
       assert.equal(edited?.exercises.length, 1);
       const rows = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM workout_sets');
       assert.equal(rows?.n, 1, 'old sets were removed');
+    }));
+
+  test('saving a workout whose template was deleted unlinks it instead of failing', () =>
+    withDb(async (db) => {
+      const bench = await exerciseId(db, 'Bench Press (Barbell)');
+      const tid = await saveTemplate(db, null, { name: 'Upper A', notes: '', kind: 'workout', folder: null, exercises: [] });
+      await deleteTemplate(db, tid);
+      const id = await saveWorkout(db, null, {
+        name: 'Upper A',
+        notes: '',
+        startedAt: 1_000,
+        endedAt: 2_000,
+        templateId: tid,
+        exercises: [{ exerciseId: bench.id, notes: '', sets: [set(60, 8)] }],
+      });
+      const w = await getWorkout(db, id);
+      assert.equal(w?.templateId, null);
+      assert.equal(w?.exercises.length, 1);
+      await assert.rejects(
+        saveWorkout(db, null, { name: 'X', notes: '', startedAt: 3_000, endedAt: 4_000, templateId: null, exercises: [{ exerciseId: 999_999, notes: '', sets: [set(1, 1)] }] }),
+        /no longer exists/,
+      );
     }));
 
   test('history: newest first, previous sets and records before a date', () =>

@@ -2,7 +2,7 @@
 // monster slain and earns XP; XP adds up to a character level, and the kind of training you do
 // raises five attributes. Everything here is derived from the workout history, nothing is stored.
 
-import type { ActiveSet, ActiveWorkout } from './activeWorkout';
+import { hasValues, type ActiveSet, type ActiveWorkout } from './activeWorkout';
 import { computeRecords, newRecords, type Records } from './calc';
 import { startOfWeek } from './format';
 import { exerciseCategory, type BodyPart, type ExerciseType, type SetData } from './types';
@@ -308,7 +308,7 @@ export function nextEncounter(w: ActiveWorkout): Encounter | null {
   for (let r = 0; r < rooms.length; r++) {
     let best: { exerciseIndex: number; setIndex: number } | null = null;
     for (const i of rooms[r]) {
-      const setIndex = w.exercises[i].sets.findIndex((s) => !s.completed);
+      const setIndex = w.exercises[i].sets.findIndex((s) => !isSlain(s));
       if (setIndex >= 0 && (best == null || setIndex < best.setIndex)) best = { exerciseIndex: i, setIndex };
     }
     if (best) {
@@ -319,13 +319,18 @@ export function nextEncounter(w: ActiveWorkout): Encounter | null {
   return null;
 }
 
-/** Sets completed / total in a live workout. */
+/** A set's monster is slain once it's ticked off with something entered (as finishing saves it). */
+export function isSlain(s: ActiveSet): boolean {
+  return s.completed && hasValues(s);
+}
+
+/** Sets slain / total in a live workout. */
 export function dungeonProgress(w: ActiveWorkout): { done: number; total: number } {
   let done = 0;
   let total = 0;
   for (const e of w.exercises) {
     total += e.sets.length;
-    done += e.sets.filter((s: ActiveSet) => s.completed).length;
+    done += e.sets.filter(isSlain).length;
   }
   return { done, total };
 }

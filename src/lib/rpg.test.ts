@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { newActiveSet, type ActiveWorkout } from './activeWorkout';
+import { countEmptyCompletedSets, newActiveSet, type ActiveWorkout } from './activeWorkout';
 import { computeRecords } from './calc';
 import {
   achievementsFrom,
@@ -17,6 +17,7 @@ import {
   characterFrom,
   gearTier,
   longestWeekStreak,
+  dungeonProgress,
   dungeonRooms,
   levelFromXp,
   monsterFor,
@@ -243,7 +244,7 @@ describe('nextEncounter', () => {
     notes: '',
     restSeconds: null,
     supersetId,
-    sets: done.map((completed, i) => ({ ...newActiveSet(), key: `${key}${i}`, completed })),
+    sets: done.map((completed, i) => ({ ...newActiveSet({ weight: 50, reps: 5 }), key: `${key}${i}`, completed })),
   });
   const workout = (exercises: ReturnType<typeof ex>[]): ActiveWorkout => ({
     name: '',
@@ -266,6 +267,13 @@ describe('nextEncounter', () => {
     assert.equal(nextEncounter(w)?.setKey, 'b0');
     w.exercises[1].sets[0].completed = true;
     assert.equal(nextEncounter(w)?.setKey, 'a1');
+  });
+  it('keeps the monster of a ticked set with nothing entered', () => {
+    const w = workout([ex('a', [true, false])]);
+    w.exercises[0].sets[0] = { ...w.exercises[0].sets[0], weight: null, reps: null };
+    assert.equal(nextEncounter(w)?.setKey, 'a0');
+    assert.deepEqual(dungeonProgress(w), { done: 0, total: 2 });
+    assert.equal(countEmptyCompletedSets(w), 1);
   });
   it('is null when every set is done', () => {
     assert.equal(nextEncounter(workout([ex('a', [true])])), null);

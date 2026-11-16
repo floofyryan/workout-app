@@ -14,6 +14,7 @@ import { Button } from '@/components/ui';
 import { getTemplate, saveTemplate } from '@/db/repo';
 import {
   completedExercises,
+  countEmptyCompletedSets,
   countIncompleteSets,
   templateChanges,
   templateExercisesFromWorkout,
@@ -52,16 +53,24 @@ export default function ActiveWorkoutScreen() {
   if (!workout) return <View style={{ flex: 1, backgroundColor: colors.background }} />;
 
   const onFinish = async () => {
+    const empty = countEmptyCompletedSets(workout);
     if (completedExercises(workout).length === 0) {
-      Alert.alert('No completed sets', 'Tick off at least one set before finishing, or cancel the workout.');
+      Alert.alert(
+        'No completed sets',
+        empty > 0
+          ? `The ${empty === 1 ? 'set' : `${empty} sets`} you ticked off ${empty === 1 ? 'has' : 'have'} nothing entered. Fill in the weight, reps or time, then finish — or cancel the workout.`
+          : 'Tick off at least one set before finishing, or cancel the workout.',
+      );
       return;
     }
     const incomplete = countIncompleteSets(workout);
+    const discarded = [
+      incomplete > 0 ? `${incomplete} incomplete set${incomplete === 1 ? '' : 's'}` : null,
+      empty > 0 ? `${empty} ticked set${empty === 1 ? '' : 's'} with nothing entered` : null,
+    ].filter(Boolean);
     const ok = await confirmAsync(
       'Finish workout?',
-      incomplete > 0
-        ? `${incomplete} incomplete set${incomplete === 1 ? '' : 's'} will be discarded.`
-        : 'All sets are complete. Nice work!',
+      discarded.length > 0 ? `${discarded.join(' and ')} will be discarded.` : 'All sets are complete. Nice work!',
       'Finish',
     );
     if (!ok) return;
@@ -101,7 +110,7 @@ export default function ActiveWorkoutScreen() {
       finishing.current = false;
     } catch (e) {
       finishing.current = false;
-      Alert.alert('Could not save workout', String(e));
+      Alert.alert('Could not save workout', `Your workout is still here, so you can try again.\n\n${String(e)}`);
     }
     setSaving(false);
   };

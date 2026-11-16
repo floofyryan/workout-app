@@ -99,7 +99,8 @@ export function fillBlanks(set: ActiveSet, previous: SetData | undefined): Activ
   };
 }
 
-function hasValues(s: SetData): boolean {
+/** Whether a set has anything entered (weight, reps, time or distance); empty sets aren't saved. */
+export function hasValues(s: SetData): boolean {
   return s.weight != null || s.reps != null || s.durationS != null || s.distanceM != null;
 }
 
@@ -115,6 +116,11 @@ export function completedExercises(w: ActiveWorkout) {
     .filter((e) => e.sets.length > 0);
   const groups = supersetGroupsFromIds(done.map((e) => e.supersetId));
   return done.map(({ supersetId: _, ...e }, i) => ({ ...e, supersetGroup: groups[i] }));
+}
+
+/** Sets that were ticked off but have nothing entered, so finishing won't save them. */
+export function countEmptyCompletedSets(w: ActiveWorkout): number {
+  return w.exercises.reduce((n, e) => n + e.sets.filter((s) => s.completed && !hasValues(s)).length, 0);
 }
 
 export function countIncompleteSets(w: ActiveWorkout): number {

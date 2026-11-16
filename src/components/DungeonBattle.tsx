@@ -12,6 +12,7 @@ import { useNow } from '@/lib/hooks';
 import {
   beatsRecord,
   heroFrom,
+  isSlain,
   dungeonProgress,
   gearTier,
   levelFromXp,
@@ -41,7 +42,7 @@ function sessionXp(w: ActiveWorkout, exercises: Map<number, Exercise>): number {
   let xp = 0;
   for (const e of w.exercises) {
     const type = exercises.get(e.exerciseId)?.type ?? 'weight_reps';
-    for (const s of e.sets) if (s.completed) xp += setXp(type, s);
+    for (const s of e.sets) if (isSlain(s)) xp += setXp(type, s);
   }
   return xp;
 }
@@ -52,7 +53,7 @@ function sessionEntries(w: ActiveWorkout, exercises: Map<number, Exercise>): Ach
     const ex = exercises.get(e.exerciseId);
     const source = ex ? { type: ex.type, bodyPart: ex.bodyPart, category: ex.category } : UNKNOWN;
     return e.sets
-      .filter((s) => s.completed)
+      .filter(isSlain)
       .map((set) => ({ ...source, set, workoutId: -1, startedAt: w.startedAt, exerciseId: e.exerciseId, workoutExerciseId: -1 }));
   });
 }
@@ -199,7 +200,7 @@ export function DungeonBattle({ workout, units }: { workout: ActiveWorkout; unit
     let slain = null as Slain | null; // Assigned in the callback below, which TypeScript does not track.
     for (const e of workout.exercises) {
       e.sets.forEach((s, i) => {
-        if (!s.completed) return;
+        if (!isSlain(s)) return;
         completed.add(s.key);
         if (prevCompleted.current && !prevCompleted.current.has(s.key)) {
           const ex = exercises.get(e.exerciseId);
@@ -296,7 +297,9 @@ export function DungeonBattle({ workout, units }: { workout: ActiveWorkout; unit
     headline = `Room ${encounter.room}/${encounter.rooms} · ${exName} · set ${setNo}/${current.sets.length}`;
     const target = targetText(currentEx, current.sets[encounter.setIndex], previous.get(current.exerciseId)?.[encounter.setIndex], units);
     const foe = `${article(monster.name)} ${monster.name}`;
-    if (holding) guide = `Hold the line! ${formatClock(Math.ceil(holdLeft))} until the ${monster.name} falls.`;
+    if (current.sets[encounter.setIndex].completed) {
+      guide = `You ticked this set off but entered nothing, so the ${monster.name} is still standing. Fill in the numbers to slay it — empty sets aren't saved.`;
+    } else if (holding) guide = `Hold the line! ${formatClock(Math.ceil(holdLeft))} until the ${monster.name} falls.`;
     else if (restTimer && restLeft > 0) guide = `Catch your breath… ${foe.toLowerCase()} attacks in ${formatClock(restLeft)}.`;
     else if (monster.record) guide = `The Record Keeper guards your best! Beat it${target ? ` with ${target}` : ''} for a new PR.`;
     else if (monster.boss) guide = `${foe} awakens! Go all out${target ? `: ${target}` : ''}.`;

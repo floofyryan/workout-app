@@ -444,9 +444,29 @@ async function insertWorkoutExercises(db: SQLiteDatabase, workoutId: number, exe
   }
 }
 
+/** Exercise ids that aren't in the database. */
+async function missingExercises(db: SQLiteDatabase, ids: number[]): Promise<number[]> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return [];
+  const rows = await db.getAllAsync<{ id: number }>(`SELECT id FROM exercises WHERE id IN (${placeholders(unique.length)})`, unique);
+  const found = new Set(rows.map((r) => r.id));
+  return unique.filter((id) => !found.has(id));
+}
+
 /** Creates (id = null) or replaces a workout. Returns its id. */
 export async function saveWorkout(db: SQLiteDatabase, id: number | null, w: WorkoutInput): Promise<number> {
   let workoutId = id;
+  // The template may have been deleted (or replaced by a restored backup) since the workout started;
+  // the workout then simply isn't linked to one, rather than failing the foreign key.
+  const templateId =
+    w.templateId != null && (await db.getFirstAsync('SELECT 1 FROM templates WHERE id = ?', w.templateId)) ? w.templateId : null;
+  const missing = await missingExercises(db, w.exercises.map((e) => e.exerciseId));
+  if (missing.length > 0) {
+    throw new Error(
+      `${missing.length === 1 ? 'An exercise' : `${missing.length} exercises`} in this workout no longer exist${missing.length === 1 ? 's' : ''} (ids ${missing.join(', ')}). Replace ${missing.length === 1 ? 'it' : 'them'} and try again.`,
+    );
+  }
+  w = { ...w, templateId };
   await db.withTransactionAsync(async () => {
     if (workoutId == null) {
       const res = await db.runAsync(
