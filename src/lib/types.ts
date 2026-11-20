@@ -179,6 +179,8 @@ export interface Settings {
   keepScreenOn: boolean;
   /** Notify when rest/hold timers end while the app is in the background or the screen is off. */
   timerNotifications: boolean;
+  /** Pop up a "workout in progress" notification when leaving the app mid-workout. */
+  workoutNotification: boolean;
   /** Which figure the exercise body map shows. */
   bodyMapFigure: 'goblin' | 'male' | 'female';
   /** RPG flavour: XP, levels, a character sheet and monsters to fight during workouts. */

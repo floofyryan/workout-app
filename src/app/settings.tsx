@@ -151,6 +151,10 @@ export default function SettingsScreen() {
           <Switch value={settings.timerNotifications} onValueChange={(v) => updateSettings({ timerNotifications: v })} />
         </View>
         <View style={styles.switchRow}>
+          <Text style={[styles.text, { flex: 1, marginRight: spacing.md }]}>Notify me a workout is running when I leave the app</Text>
+          <Switch value={settings.workoutNotification} onValueChange={(v) => updateSettings({ workoutNotification: v })} />
+        </View>
+        <View style={styles.switchRow}>
           <Text style={[styles.text, { flex: 1, marginRight: spacing.md }]}>Adventure mode (XP, monsters & character)</Text>
           <Switch value={settings.adventureMode} onValueChange={(v) => updateSettings({ adventureMode: v })} />
         </View>

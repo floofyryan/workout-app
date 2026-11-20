@@ -146,6 +146,7 @@ export const DEFAULT_SETTINGS: Settings = {
   timerSounds: true,
   keepScreenOn: true,
   timerNotifications: true,
+  workoutNotification: true,
   bodyMapFigure: 'goblin',
   adventureMode: true,
 };

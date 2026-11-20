@@ -39,6 +39,9 @@ in SQLite.
     automatically. ±15 s, Done (records the time held so far) and Cancel while it runs.
   - With the screen off or the app in the background, a notification tells you when a hold or rest
     is over (can be turned off in Settings).
+  - Leaving the app mid-workout pops up a silent "Workout in progress" notification (name, start
+    time, sets done) that stays until you come back; tapping it, or a rest/hold alert, opens the
+    workout (can be turned off in Settings).
   - The workout survives the app being closed, and keeps the screen on (configurable).
   - Finishing offers to update the template if you changed its exercises or sets, or lifted different
     weights / reps, so next time it starts filled in with what you did.

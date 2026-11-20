@@ -10,7 +10,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { Vibration } from 'react-native';
+import { router } from 'expo-router';
+import { AppState, Vibration } from 'react-native';
 
 import { getExercisesByIds, getKv, getPreviousSets, markTemplateUsed, saveWorkout, setKv } from '@/db/repo';
 import {
@@ -23,7 +24,13 @@ import {
   type ActiveWorkout,
 } from '@/lib/activeWorkout';
 import { defaultWorkoutName } from '@/lib/format';
-import { cancelTimerNotification, scheduleTimerNotification } from '@/lib/timerNotifications';
+import {
+  cancelTimerNotification,
+  hideWorkoutInProgress,
+  onWorkoutNotificationTap,
+  scheduleTimerNotification,
+  showWorkoutInProgress,
+} from '@/lib/timerNotifications';
 import { playTimerSound, preloadTimerSounds } from '@/lib/timerSounds';
 import type { Exercise, SetData, Template } from '@/lib/types';
 import { useSettings } from './SettingsContext';
@@ -96,13 +103,56 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     workoutRef.current = workout;
   }, [workout]);
 
+  // Tapping one of our notifications opens the workout — once it has loaded, if the tap launched the app.
+  const pendingOpen = useRef(false);
+  const openWorkout = useCallback(() => {
+    pendingOpen.current = false;
+    // Give the navigator a moment to be ready (e.g. right after launch).
+    setTimeout(() => {
+      if (workoutRef.current) router.navigate('/active-workout');
+    }, 300);
+  }, []);
+  useEffect(
+    () =>
+      onWorkoutNotificationTap(() => {
+        if (loaded.current) openWorkout();
+        else pendingOpen.current = true;
+      }),
+    [openWorkout],
+  );
+
   // Restore an in-progress workout after the app was closed.
   useEffect(() => {
     readStoredWorkout(db).then((w) => {
       setWorkout(w);
+      workoutRef.current = w;
       loaded.current = true;
+      if (!w) hideWorkoutInProgress(); // Left over from a workout that's gone.
+      if (pendingOpen.current) openWorkout();
     });
-  }, [db]);
+  }, [db, openWorkout]);
+
+  // Leaving the app mid-workout pops up a "workout in progress" notification; coming back clears it.
+  const notifyWhenAway = settings.workoutNotification;
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      const w = workoutRef.current;
+      if (state === 'active') hideWorkoutInProgress();
+      else if (state === 'background' && w && notifyWhenAway) {
+        const total = w.exercises.reduce((n, e) => n + e.sets.length, 0);
+        const done = w.exercises.reduce((n, e) => n + e.sets.filter((s) => s.completed).length, 0);
+        const started = new Date(w.startedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+        showWorkoutInProgress(
+          'Workout in progress',
+          `${w.name || 'Workout'} · started ${started} · ${done} of ${total} sets done. Tap to go back.`,
+        );
+      }
+    });
+    return () => sub.remove();
+  }, [notifyWhenAway]);
+  useEffect(() => {
+    if (!workout || !notifyWhenAway) hideWorkoutInProgress();
+  }, [workout, notifyWhenAway]);
 
   const reloadFromStorage = useCallback(async () => {
     loaded.current = false;
