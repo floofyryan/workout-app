@@ -1,10 +1,8 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
-import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { imageUrl, videoSearchUrl } from '@/lib/freeExerciseDb';
+import { imageUrl } from '@/lib/freeExerciseDb';
 import { colors, radius } from '@/lib/theme';
 import type { Exercise } from '@/lib/types';
 
@@ -59,56 +57,7 @@ export function ExerciseDemo({ exercise }: { exercise: Exercise }) {
   );
 }
 
-/**
- * Opens video demonstrations of the exercise in a popup over the app (a sheet on iOS, an in-app
- * browser tab on Android) rather than switching to another app.
- */
-export async function openExerciseVideo(name: string) {
-  try {
-    await WebBrowser.openBrowserAsync(videoSearchUrl(name), {
-      presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-      toolbarColor: colors.background,
-      controlsColor: colors.primary,
-      dismissButtonStyle: 'done',
-      showTitle: true,
-      enableBarCollapsing: true,
-      // Keep it on top of the app, so closing it comes straight back here.
-      createTask: false,
-    });
-  } catch {
-    // Already open, or no browser available.
-  }
-}
-
-export function WatchVideoButton({ exercise }: { exercise: Exercise }) {
-  const [opening, setOpening] = useState(false);
-  const open = async () => {
-    if (opening) return;
-    setOpening(true);
-    await openExerciseVideo(exercise.name);
-    setOpening(false);
-  };
-  return (
-    <Pressable onPress={open} style={({ pressed }) => [styles.videoButton, pressed && { opacity: 0.7 }]} accessibilityRole="button">
-      <Ionicons name="logo-youtube" size={20} color="#FF0033" />
-      <Text style={styles.videoText}>Watch a video</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  videoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingVertical: 10,
-  },
-  videoText: { color: colors.text, fontWeight: '600', fontSize: 15 },
   thumb: {
     backgroundColor: colors.cardAlt,
     alignItems: 'center',

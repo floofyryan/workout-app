@@ -7,7 +7,7 @@ import { SEED_EXERCISES, SEED_STRETCH_TEMPLATES } from '../data/exercises';
 import { FREE_EXERCISE_DB_LINKS } from '../data/freeExerciseDbMap';
 import { holdDuration, newActiveExercise, newActiveSet } from './activeWorkout';
 import { guessExercise } from './exerciseGuess';
-import { displayName, toBodyPart, toEquipment, toExerciseType, type FreeExercise, videoSearchUrl } from './freeExerciseDb';
+import { displayName, toBodyPart, toEquipment, toExerciseType, type FreeExercise } from './freeExerciseDb';
 import { exerciseCategory } from './types';
 
 const data: FreeExercise[] = JSON.parse(
@@ -103,11 +103,4 @@ describe('holdDuration', () => {
     assert.equal(holdDuration(ex, 1), 45);
     assert.equal(holdDuration(ex, 2), 60);
   });
-});
-
-describe('videoSearchUrl', () => {
-  it('puts the equipment first and asks for form', () =>
-    assert.equal(videoSearchUrl('Bench Press (Dumbbell)'), 'https://www.youtube.com/results?search_query=Dumbbell%20Bench%20Press%20form'));
-  it('keeps plain names', () =>
-    assert.equal(videoSearchUrl('Plank'), 'https://www.youtube.com/results?search_query=Plank%20form'));
 });

@@ -36,7 +36,6 @@ import {
 } from '@/lib/units';
 import { useSettings } from '@/state/SettingsContext';
 import { DurationInput, NumberInput } from './NumberInput';
-import { openExerciseVideo } from './ExerciseMedia';
 import { ActionSheet, PromptModal, type SheetAction } from './Sheets';
 import { ReorderSheet, SwipeToDelete } from './Sortable';
 import { Button } from './ui';
@@ -118,14 +117,6 @@ export function WorkoutEditor({
           }),
       },
     ];
-    if (ex) {
-      actions.push({
-        label: 'Watch a video',
-        icon: 'logo-youtube',
-        // Let this menu finish closing first: iOS can't show the video popup while another is closing.
-        onPress: () => setTimeout(() => openExerciseVideo(ex.name), 400),
-      });
-    }
     if (mode !== 'edit') {
       actions.push({
         label: 'Rest timer',

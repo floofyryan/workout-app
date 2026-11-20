@@ -94,13 +94,3 @@ export function displayName(e: FreeExercise): string {
   if (e.category === 'stretching' || e.category === 'cardio' || !re || re.test(e.name)) return e.name;
   return `${e.name} (${equipment})`;
 }
-
-/**
- * A YouTube search for a demonstration of the exercise. "Bench Press (Dumbbell)" is searched as
- * "Dumbbell Bench Press form", which matches how videos are titled.
- */
-export function videoSearchUrl(name: string): string {
-  const m = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(name.trim());
-  const words = m ? `${m[2]} ${m[1]}` : name.trim();
-  return `https://www.youtube.com/results?search_query=${encodeURIComponent(`${words} form`)}`;
-}
