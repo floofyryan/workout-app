@@ -36,7 +36,8 @@
         }
       ],
       "expo-asset",
-      "./plugins/withGradleMemory"
+      "./plugins/withGradleMemory",
+      "expo-web-browser"
     ]
   }
 }

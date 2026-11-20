@@ -78,7 +78,9 @@ in SQLite.
   (a little flexing gym goblin by default, or male/female anatomy) lets you tap a muscle to see its exercises. Search, filter by body part and
   equipment, and type (strength, stretching, cardio, plyometrics, Olympic lifting, strongman), sort
   by most used, create custom exercises. Each exercise has **About** (start/end
-  photos, muscles, level and step-by-step instructions where available), **History**, **Charts**
+  photos, muscles, level and step-by-step instructions where available, plus a **Watch a video** button
+  that opens YouTube demonstrations in a popup over the app — also in each exercise's ⋯ menu during a
+  workout), **History**, **Charts**
   (est. 1RM, heaviest weight, volume, reps, duration, distance) and **Records** (PRs plus a 1–12
   rep-max table). Bodyweight exercises are tracked as reps only; "(Weighted)" and "(Assisted)"
   variants track the added or assisting weight.

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { LineChart, type Point } from '@/components/Charts';
-import { ExerciseDemo } from '@/components/ExerciseMedia';
+import { ExerciseDemo, WatchVideoButton } from '@/components/ExerciseMedia';
 import { Button, Card, EmptyState, SectionTitle } from '@/components/ui';
 import { getExercise, getExerciseHistory, type ExerciseHistoryEntry } from '@/db/repo';
 import {
@@ -95,7 +95,10 @@ function About({ exercise, sessions }: { exercise: Exercise; sessions: number })
   return (
     <>
       <ExerciseDemo exercise={exercise} />
-      <Card style={exercise.images.length ? { marginTop: spacing.md } : undefined}>
+      <View style={exercise.images.length ? { marginTop: spacing.md } : undefined}>
+        <WatchVideoButton exercise={exercise} />
+      </View>
+      <Card style={{ marginTop: spacing.md }}>
         {rows.map(([k, v]) => (
           <View key={k} style={styles.aboutRow}>
             <Text style={styles.muted}>{k}</Text>
