@@ -415,6 +415,47 @@ describe('weekly plan', () => {
 });
 
 describe('settings, measurements and backups', () => {
+  test('an app update backs up the data before changing the database, and the backup restores', async () => {
+    const old = openTestDb();
+    try {
+      await migrateDb(old, SCHEMA_VERSION - 1);
+      const tid = await saveTemplate(old, null, { name: 'Upper A', notes: '', kind: 'workout', folder: null, exercises: [] });
+      let backup: string | null = null;
+      let from = 0;
+      await migrateDb(old, SCHEMA_VERSION, async (v) => {
+        from = v;
+        backup = await exportBackup(old); // Taken from the old database, before the upgrade.
+      });
+      assert.equal(from, SCHEMA_VERSION - 1);
+      assert.ok(backup);
+      await withDb(async (fresh) => {
+        await restoreBackup(fresh, backup!);
+        assert.equal((await getTemplate(fresh, tid))?.name, 'Upper A');
+      });
+      // Up to date: no backup needed.
+      let called = false;
+      await migrateDb(old, SCHEMA_VERSION, async () => {
+        called = true;
+      });
+      assert.equal(called, false);
+    } finally {
+      old.close();
+    }
+  });
+
+  test('a brand-new database is not backed up', async () => {
+    const db = openTestDb();
+    try {
+      let called = false;
+      await migrateDb(db, SCHEMA_VERSION, async () => {
+        called = true;
+      });
+      assert.equal(called, false);
+    } finally {
+      db.close();
+    }
+  });
+
   test('settings round trip and fill in defaults', () =>
     withDb(async (db) => {
       const defaults = await getSettings(db);

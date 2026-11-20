@@ -878,8 +878,12 @@ const BACKUP_TABLES = [
 /** Full JSON dump of every table, for backups. */
 export async function exportBackup(db: SQLiteDatabase): Promise<string> {
   const data: Record<string, unknown[]> = {};
+  // An older database (backed up just before an upgrade) may not have every table yet.
+  const existing = new Set(
+    (await db.getAllAsync<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'")).map((r) => r.name),
+  );
   for (const t of BACKUP_TABLES) {
-    data[t] = await db.getAllAsync(`SELECT * FROM ${t}`);
+    data[t] = existing.has(t) ? await db.getAllAsync(`SELECT * FROM ${t}`) : [];
   }
   return JSON.stringify({ app: 'workout-app', version: 1, exportedAt: Date.now(), data });
 }

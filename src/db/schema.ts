@@ -282,10 +282,19 @@ async function seed(db: SQLiteDatabase) {
 export const SCHEMA_VERSION = MIGRATIONS.length;
 
 /** Brings the database up to date (or up to `upTo`, which tests use to simulate older installs). */
-export async function migrateDb(db: SQLiteDatabase, upTo = SCHEMA_VERSION) {
+/**
+ * Brings the database up to date. `beforeUpgrade` runs once before upgrading an existing database
+ * (not a brand-new one), so the app can back up the user's data first.
+ */
+export async function migrateDb(
+  db: SQLiteDatabase,
+  upTo = SCHEMA_VERSION,
+  beforeUpgrade?: (fromVersion: number) => Promise<void>,
+) {
   await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   let version = row?.user_version ?? 0;
+  if (version > 0 && version < upTo && beforeUpgrade) await beforeUpgrade(version);
   while (version < upTo) {
     const migration = MIGRATIONS[version];
     await db.withTransactionAsync(async () => {

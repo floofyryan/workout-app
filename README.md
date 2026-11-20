@@ -94,6 +94,10 @@ in SQLite.
 - **Import / export** – import your history from a **Strong CSV export** (Strong → Settings →
   Export Strong Data); exercises are matched by name and unknown ones are created. Export
   everything as a Strong-compatible CSV, or back up / restore all data as JSON.
+- **Automatic backups** – the app saves a backup of everything (templates, weekly plan, workouts,
+  exercises, measurements, settings) on the phone once a week, before an app update changes the
+  database, and before you restore a backup. Settings → Automatic backups lists them to restore or
+  share. Updating with `build-phone.bat` installs over the existing app, so data is kept anyway.
 
 ## Running it
 

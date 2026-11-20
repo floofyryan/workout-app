@@ -1,12 +1,14 @@
 import { useSQLiteContext } from 'expo-sqlite';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { NumberInput } from '@/components/NumberInput';
 import { Button, Card, Chip, SectionTitle } from '@/components/ui';
 import { deleteAllWorkouts, exportBackup, exportWorkouts, importWorkouts, restoreBackup } from '@/db/repo';
+import { listAutoBackups, saveAutoBackup, type AutoBackup } from '@/lib/autoBackup';
+import { BACKUP_REASON_LABELS } from '@/lib/backupNames';
 import { dateStamp, pickTextFile, shareTextFile } from '@/lib/files';
-import { formatClock, parseNumber } from '@/lib/format';
+import { formatClock, formatDate, formatTime, parseNumber } from '@/lib/format';
 import { parseStrongCsv, workoutsToStrongCsv } from '@/lib/strongCsv';
 import { colors, radius, spacing } from '@/lib/theme';
 import type { UnitSystem } from '@/lib/types';
@@ -37,6 +39,8 @@ export default function SettingsScreen() {
   const { reloadFromStorage } = useActiveWorkout();
   const [platesText, setPlatesText] = useState(settings.plates.join(', '));
   const [busy, setBusy] = useState<string | null>(null);
+  const [autoBackups, setAutoBackups] = useState<AutoBackup[]>(() => listAutoBackups());
+  const refreshAutoBackups = useCallback(() => setAutoBackups(listAutoBackups()), []);
   const wu = weightUnit(settings.units);
 
   const run = async (label: string, fn: () => Promise<void>) => {
@@ -81,6 +85,20 @@ export default function SettingsScreen() {
       await shareTextFile(`workout-backup-${dateStamp()}.json`, await exportBackup(db), 'application/json');
     });
 
+  /** Replaces all data with a backup, saving the current data first so the restore can be undone. */
+  const restoreFrom = async (text: string) => {
+    saveAutoBackup(await exportBackup(db), 'before-restore');
+    await restoreBackup(db, text);
+    const restored = await reloadSettings();
+    setPlatesText(restored.plates.join(', '));
+    await reloadFromStorage();
+    refreshAutoBackups();
+    Alert.alert(
+      'Restored',
+      'Your workouts, templates, plan, exercises and settings have been restored. Your data from just before is kept under Automatic backups.',
+    );
+  };
+
   const restore = () =>
     Alert.alert('Restore backup?', 'This replaces ALL current data with the backup.', [
       { text: 'Cancel', style: 'cancel' },
@@ -91,14 +109,23 @@ export default function SettingsScreen() {
           run('restore', async () => {
             const text = await pickTextFile(['application/json', '*/*']);
             if (text == null) return;
-            await restoreBackup(db, text);
-            const restored = await reloadSettings();
-            setPlatesText(restored.plates.join(', '));
-            await reloadFromStorage();
-            Alert.alert('Restored', 'Your workouts, templates, exercises and settings have been restored.');
+            await restoreFrom(text);
           }),
       },
     ]);
+
+  const restoreAuto = (b: AutoBackup) =>
+    Alert.alert(
+      'Restore this backup?',
+      `${BACKUP_REASON_LABELS[b.reason]} from ${formatDate(b.ts)}, ${formatTime(b.ts)}. This replaces ALL current data with it.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Restore', style: 'destructive', onPress: () => run('restore', async () => restoreFrom(await b.file.text())) },
+      ],
+    );
+
+  const shareAuto = (b: AutoBackup) =>
+    run('backup', async () => shareTextFile(`workout-backup-${dateStamp()}.json`, await b.file.text(), 'application/json'));
 
   const wipe = () =>
     Alert.alert('Delete all workouts?', 'Your workout history will be permanently deleted. Templates and exercises are kept.', [
@@ -196,6 +223,29 @@ export default function SettingsScreen() {
       <Button title="Export workouts (CSV)" icon="share-outline" variant="secondary" onPress={exportCsv} loading={busy === 'csv'} style={styles.gap} />
       <Button title="Back up all data (JSON)" icon="cloud-upload-outline" variant="secondary" onPress={backup} loading={busy === 'backup'} style={styles.gap} />
       <Button title="Restore from backup" icon="cloud-download-outline" variant="secondary" onPress={restore} loading={busy === 'restore'} style={styles.gap} />
+      <SectionTitle>Automatic backups</SectionTitle>
+      <Text style={styles.hint}>
+        Saved on this phone once a week, before an app update changes your data, and before a restore. Share one
+        to keep a copy somewhere else.
+      </Text>
+      {autoBackups.length === 0 ? (
+        <Text style={[styles.hint, { marginTop: spacing.sm }]}>None yet — the first one is made shortly after the app opens.</Text>
+      ) : (
+        <Card style={{ marginTop: spacing.sm, gap: spacing.md }}>
+          {autoBackups.map((b) => (
+            <View key={b.name} style={styles.switchRow}>
+              <View style={{ flex: 1, marginRight: spacing.sm }}>
+                <Text style={styles.text}>{BACKUP_REASON_LABELS[b.reason]}</Text>
+                <Text style={styles.hint}>
+                  {formatDate(b.ts)}, {formatTime(b.ts)}
+                </Text>
+              </View>
+              <Button title="Share" small variant="ghost" onPress={() => shareAuto(b)} />
+              <Button title="Restore" small variant="secondary" onPress={() => restoreAuto(b)} />
+            </View>
+          ))}
+        </Card>
+      )}
       <Button title="Delete all workouts" icon="trash-outline" variant="danger" onPress={wipe} loading={busy === 'wipe'} style={{ marginTop: spacing.xl }} />
     </ScrollView>
   );

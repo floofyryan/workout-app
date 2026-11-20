@@ -1,11 +1,13 @@
 import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
-import { SQLiteProvider } from 'expo-sqlite';
+import { SQLiteProvider, useSQLiteContext, type SQLiteDatabase } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { DATABASE_NAME, migrateDb } from '@/db/schema';
+import { exportBackup } from '@/db/repo';
+import { DATABASE_NAME, migrateDb, SCHEMA_VERSION } from '@/db/schema';
+import { saveAutoBackup, weeklyBackupIfDue } from '@/lib/autoBackup';
 import { colors } from '@/lib/theme';
 import { ActiveWorkoutProvider } from '@/state/ActiveWorkoutContext';
 import { SettingsProvider } from '@/state/SettingsContext';
@@ -22,6 +24,27 @@ const theme = {
   },
 };
 
+/** Opens the database, backing up the user's data first whenever an app update changes it. */
+async function initDb(db: SQLiteDatabase) {
+  await migrateDb(db, SCHEMA_VERSION, async () => {
+    try {
+      saveAutoBackup(await exportBackup(db), 'before-update');
+    } catch {
+      // Never block the app from opening.
+    }
+  });
+}
+
+/** Keeps a weekly automatic backup. */
+function WeeklyBackup() {
+  const db = useSQLiteContext();
+  useEffect(() => {
+    const t = setTimeout(() => weeklyBackupIfDue(() => exportBackup(db)), 5000);
+    return () => clearTimeout(t);
+  }, [db]);
+  return null;
+}
+
 function Loading() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
@@ -36,7 +59,8 @@ export default function RootLayout() {
       <ThemeProvider value={theme}>
         <StatusBar style="light" />
         <Suspense fallback={<Loading />}>
-          <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrateDb} useSuspense>
+          <SQLiteProvider databaseName={DATABASE_NAME} onInit={initDb} useSuspense>
+            <WeeklyBackup />
             <SettingsProvider>
               <ActiveWorkoutProvider>
                 <Stack
