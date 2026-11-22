@@ -10,6 +10,16 @@ export const DATABASE_NAME = 'workout.db';
  * Each entry upgrades the schema by one version. Never edit a migration that has shipped;
  * append a new one instead.
  */
+const PLAN_DAYS_SQL = `
+  CREATE TABLE IF NOT EXISTS plan_days (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    weekday INTEGER NOT NULL,
+    template_id INTEGER NOT NULL REFERENCES templates(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_plan_days_weekday ON plan_days(weekday, position);
+`;
+
 const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
   async (db) => {
     await db.execAsync(`
@@ -167,15 +177,7 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
   },
   // v6: weekly plan — templates scheduled on days of the week (0 = Monday … 6 = Sunday).
   async (db) => {
-    await db.execAsync(`
-      CREATE TABLE plan_days (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        weekday INTEGER NOT NULL,
-        template_id INTEGER NOT NULL REFERENCES templates(id) ON DELETE CASCADE,
-        position INTEGER NOT NULL DEFAULT 0
-      );
-      CREATE INDEX idx_plan_days_weekday ON plan_days(weekday, position);
-    `);
+    await db.execAsync(PLAN_DAYS_SQL);
   },
 ];
 
@@ -303,4 +305,8 @@ export async function migrateDb(
     version++;
     await db.execAsync(`PRAGMA user_version = ${version}`);
   }
+  // A database last opened by a build from another branch can already be at this version (or past
+  // it) through different upgrades, without tables this version needs. Add any that are missing;
+  // nothing existing is changed or removed.
+  if (upTo >= SCHEMA_VERSION) await db.execAsync(PLAN_DAYS_SQL);
 }

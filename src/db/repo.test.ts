@@ -443,6 +443,24 @@ describe('settings, measurements and backups', () => {
     }
   });
 
+  test('a database from a build with different upgrades gets the missing tables and keeps its own', async () => {
+    const db = openTestDb();
+    try {
+      // Like claude/great-fermi-g4vjji: same first five upgrades, then its own v6 and v7.
+      await migrateDb(db, 5);
+      await db.execAsync('CREATE TABLE programs (id INTEGER PRIMARY KEY, name TEXT); PRAGMA user_version = 7;');
+      await db.runAsync("INSERT INTO programs (name) VALUES ('Block 1')");
+      const tid = await saveTemplate(db, null, { name: 'Upper A', notes: '', kind: 'workout', folder: null, exercises: [] });
+      await migrateDb(db);
+      await savePlan(db, [{ weekday: 0, templateId: tid }]);
+      assert.equal((await getPlan(db)).length, 1);
+      assert.equal((await db.getFirstAsync<{ name: string }>('SELECT name FROM programs'))?.name, 'Block 1');
+      assert.equal((await getTemplate(db, tid))?.name, 'Upper A');
+    } finally {
+      db.close();
+    }
+  });
+
   test('a brand-new database is not backed up', async () => {
     const db = openTestDb();
     try {
