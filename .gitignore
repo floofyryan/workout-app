@@ -14,3 +14,6 @@ npm-debug.*
 .DS_Store
 *.tsbuildinfo
 .env*.local
+
+# The app file built by install-without-usb.bat
+Workout.apk

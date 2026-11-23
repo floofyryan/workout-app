@@ -109,6 +109,16 @@ npm start          # scan the QR code with Expo Go
 npm run android    # or open in an Android emulator
 ```
 
+## Installing on your phone without a cable (Windows)
+
+Double-click **`install-without-usb.bat`**. It pulls the latest code, installs packages, builds the
+finished app (`Workout.apk`, which runs on its own, without Metro or the computer) and then shows a
+QR code. With the phone on the same Wi-Fi, scan it with the camera, tap **Download**, open the file
+and tap **Install**/**Update** (the first time, allow the browser to install unknown apps). It
+installs over the existing app and keeps all data, because it's signed with the same key. Never
+uninstall the old app first: that deletes its data. `scripts/serve-apk.mjs` does the Wi-Fi part
+and can be run on its own to re-share the last build.
+
 ## Installing on your phone (Windows, one click)
 
 With Android Studio installed and your phone connected (USB debugging, or paired over Wi-Fi in
