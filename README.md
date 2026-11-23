@@ -30,7 +30,8 @@ in SQLite.
     them. Swipe a set left to delete it.
   - **Supersets** – link an exercise with the next one ("Superset with …" in its menu); the rest
     timer only starts after the last exercise of each round.
-  - Rest timer starts when you tick a set (±15 s, skip, beeps and vibrates when done). The beep turns
+  - Rest timer starts when you tick a set (±15 s, skip, beeps and vibrates when done). Three
+    countdown pips in the last three seconds get you ready for the next set (Settings switch). The beep turns
     down any music or podcast that's playing just while it sounds, then lets it come back up
     (can be turned off in Settings). Rest time is
     configurable per exercise, per template exercise, or globally.

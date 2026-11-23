@@ -7,6 +7,8 @@ import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-aud
 const SOURCES = {
   rest: require('../../assets/sounds/rest-over.wav'),
   hold: require('../../assets/sounds/hold-done.wav'),
+  /** 3-2-1 pips and the end-of-rest beep in one sound, so other audio dips once (restCountdown.ts). */
+  countdown: require('../../assets/sounds/countdown.wav'),
 };
 export type TimerSound = keyof typeof SOURCES;
 
@@ -33,6 +35,7 @@ export function preloadTimerSounds() {
     try {
       player('rest');
       player('hold');
+      player('countdown');
     } catch {
       // Audio unavailable: timers still vibrate.
     }
@@ -47,5 +50,17 @@ export async function playTimerSound(kind: TimerSound) {
     p.play();
   } catch {
     // Audio unavailable: timers still vibrate.
+  }
+}
+
+/** Stops a sound that is playing (e.g. a countdown that no longer matches the timer). */
+export function stopTimerSound(kind: TimerSound) {
+  try {
+    const p = players[kind];
+    if (!p) return;
+    p.pause();
+    p.seekTo(0).catch(() => {});
+  } catch {
+    // Nothing playing, or audio unavailable.
   }
 }

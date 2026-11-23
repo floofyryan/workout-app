@@ -170,6 +170,14 @@ export default function SettingsScreen() {
           <Switch value={settings.timerSounds} onValueChange={(v) => updateSettings({ timerSounds: v })} />
         </View>
         <View style={styles.switchRow}>
+          <Text style={[styles.text, { flex: 1, marginRight: spacing.md }]}>3-2-1 countdown beeps before rest ends</Text>
+          <Switch
+            value={settings.timerSounds && settings.countdownBeeps}
+            disabled={!settings.timerSounds}
+            onValueChange={(v) => updateSettings({ countdownBeeps: v })}
+          />
+        </View>
+        <View style={styles.switchRow}>
           <Text style={styles.text}>Keep screen on during workouts</Text>
           <Switch value={settings.keepScreenOn} onValueChange={(v) => updateSettings({ keepScreenOn: v })} />
         </View>

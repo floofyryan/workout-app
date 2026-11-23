@@ -144,6 +144,7 @@ export const DEFAULT_SETTINGS: Settings = {
   plates: [25, 20, 15, 10, 5, 2.5, 1.25],
   vibrateOnRestEnd: true,
   timerSounds: true,
+  countdownBeeps: true,
   keepScreenOn: true,
   timerNotifications: true,
   workoutNotification: true,

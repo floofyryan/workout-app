@@ -31,7 +31,8 @@ import {
   scheduleTimerNotification,
   showWorkoutInProgress,
 } from '@/lib/timerNotifications';
-import { playTimerSound, preloadTimerSounds } from '@/lib/timerSounds';
+import { countdownDelay, countdownStillOnTime } from '@/lib/restCountdown';
+import { playTimerSound, preloadTimerSounds, stopTimerSound } from '@/lib/timerSounds';
 import type { Exercise, SetData, Template } from '@/lib/types';
 import { useSettings } from './SettingsContext';
 
@@ -205,19 +206,43 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
   }, []);
   // Rest timer: buzz when it runs out. If the app was in the background when it ended (the
   // timeout fires late), the scheduled notification already buzzed, so don't buzz again.
+  // With countdown beeps on, a 3-2-1 sound starts so its final beep lands on the end instead.
+  const countdownFor = useRef<number | null>(null); // endsAt of the rest whose countdown is playing
   useEffect(() => {
     if (!restTimer) return;
-    const ms = restTimer.endsAt - Date.now();
+    const { endsAt } = restTimer;
+    const now = Date.now();
+    let ended = false;
+    let countdown: ReturnType<typeof setTimeout> | undefined;
+    const delay = settings.timerSounds && settings.countdownBeeps ? countdownDelay(endsAt, now) : null;
+    if (delay != null) {
+      const dueAt = now + delay;
+      countdown = setTimeout(() => {
+        if (!countdownStillOnTime(dueAt, Date.now())) return; // Came back from the background too late.
+        countdownFor.current = endsAt;
+        playTimerSound('countdown');
+      }, delay);
+    }
     const t = setTimeout(() => {
+      ended = true;
       setRestTimer(null);
       restNotif.current = null;
-      if (Date.now() - restTimer.endsAt > 2000) return;
-      if (settings.timerSounds) playTimerSound('rest');
+      if (Date.now() - endsAt > 2000) return;
+      // The countdown's last beep is the end-of-rest beep; otherwise play it now.
+      if (settings.timerSounds && countdownFor.current !== endsAt) playTimerSound('rest');
       if (settings.vibrateOnRestEnd) Vibration.vibrate([0, 400, 200, 400]);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    }, Math.max(0, ms));
-    return () => clearTimeout(t);
-  }, [restTimer, settings.vibrateOnRestEnd, settings.timerSounds]);
+    }, Math.max(0, endsAt - now));
+    return () => {
+      clearTimeout(t);
+      if (countdown) clearTimeout(countdown);
+      // Rest skipped or changed by ±15s mid-countdown: those pips no longer match the clock.
+      if (!ended && countdownFor.current === endsAt) {
+        stopTimerSound('countdown');
+        countdownFor.current = null;
+      }
+    };
+  }, [restTimer, settings.vibrateOnRestEnd, settings.timerSounds, settings.countdownBeeps]);
 
   // Load the beeps once a workout is under way, so the first one plays on time.
   const hasWorkout = workout != null;

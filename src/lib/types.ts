@@ -176,6 +176,8 @@ export interface Settings {
   vibrateOnRestEnd: boolean;
   /** Beep when rest and hold timers end, briefly turning down other apps' audio. */
   timerSounds: boolean;
+  /** 3-2-1 beeps before a rest ends, so you're ready to start the next set. */
+  countdownBeeps: boolean;
   keepScreenOn: boolean;
   /** Notify when rest/hold timers end while the app is in the background or the screen is off. */
   timerNotifications: boolean;
