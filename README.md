@@ -126,9 +126,13 @@ app never uses (Reanimated and Gesture Handler, which only come along with Expo 
 
 ## Installing on your phone (Windows, one click)
 
-With Android Studio installed and your phone connected (USB debugging, or paired over Wi-Fi in
-Android Studio → Device Manager), double-click **`build-phone.bat`**. It pulls the latest code,
-installs packages, generates the Android project and installs a release build on the phone. The
+With Android Studio installed and your phone connected (paired over Wi-Fi in Android Studio →
+Device Manager, or USB debugging), double-click **`build-phone.bat`**. It pulls the latest code,
+installs packages, generates the Android project and installs a release build on the phone; steps
+whose files haven't changed are skipped. Android Studio's **Run** button works too, without Metro:
+`plugins/withEmbeddedJsInDebug.js` puts the app's code inside debug builds as well (after pulling
+new code, run `build-phone.bat` once, or `npm install` and `npx expo prebuild -p android --clean`,
+so the Android project is up to date). The
 `plugins/withGradleMemory.js` config plugin gives Gradle enough memory for this (and turns on its
 build cache and parallel builds), so the generated
 `android/` folder never needs editing.

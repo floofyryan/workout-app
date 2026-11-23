@@ -22,15 +22,37 @@ if errorlevel 1 (
   goto :fail
 )
 
+REM Steps whose files haven't changed since the last successful run are skipped, so repeat runs are quick.
 echo.
-echo [2/4] Installing packages...
-call npm install
-if errorlevel 1 goto :fail
+echo [2/4] Packages...
+node scripts\build-steps.mjs need install
+if errorlevel 1 (
+  echo     Up to date - skipped.
+) else (
+  REM Only when the package versions really changed: clear compiled native code built against the
+  REM old ones (otherwise keep it - recompiling it is the slowest part of the build).
+  node scripts\build-steps.mjs changed install
+  if not errorlevel 1 (
+    for %%m in (expo-modules-core react-native-worklets react-native-reanimated react-native-gesture-handler react-native-screens) do (
+      if exist "node_modules\%%m\android\.cxx" rmdir /s /q "node_modules\%%m\android\.cxx"
+      if exist "node_modules\%%m\android\build" rmdir /s /q "node_modules\%%m\android\build"
+    )
+  )
+  call npm install --include=dev --no-audit --no-fund
+  if errorlevel 1 goto :fail
+  node scripts\build-steps.mjs done install
+)
 
 echo.
-echo [3/4] Preparing the Android project...
-call npx expo prebuild -p android --clean --no-install
-if errorlevel 1 goto :fail
+echo [3/4] Android project...
+node scripts\build-steps.mjs need prebuild
+if errorlevel 1 (
+  echo     Up to date - skipped.
+) else (
+  call npx expo prebuild -p android --clean --no-install
+  if errorlevel 1 goto :fail
+  node scripts\build-steps.mjs done prebuild
+)
 
 echo.
 echo Connected devices:
