@@ -32,11 +32,17 @@ echo.
 echo [3/4] Preparing the Android project...
 call npx expo prebuild -p android --clean --no-install
 if errorlevel 1 goto :fail
+REM Clear compiled native code left over from earlier builds (it can hold mismatched versions).
+for %%m in (expo-modules-core react-native-worklets react-native-reanimated react-native-gesture-handler react-native-screens) do (
+  if exist "node_modules\%%m\android\.cxx" rmdir /s /q "node_modules\%%m\android\.cxx"
+  if exist "node_modules\%%m\android\build" rmdir /s /q "node_modules\%%m\android\build"
+)
 
 echo.
-echo [4/4] Building the app (the first time takes ~10 minutes)...
+echo [4/4] Building the app (can take ~10 minutes the first time)...
 pushd android
-call gradlew.bat assembleRelease
+REM Phones use arm64 chips; building only that is much faster and avoids emulator-only code.
+call gradlew.bat assembleRelease -PreactNativeArchitectures=arm64-v8a
 set BUILD_RESULT=%errorlevel%
 popd
 if not "%BUILD_RESULT%"=="0" goto :fail
