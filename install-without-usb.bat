@@ -82,6 +82,14 @@ echo.
 echo Built! The app file is also saved as Workout.apk in this folder.
 
 :share
+REM Let the phone reach this computer through Windows Firewall (asks for permission once).
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\firewall.ps1" -Check
+if errorlevel 1 (
+  echo.
+  echo Windows will ask for permission so your phone can reach this computer - click Yes.
+  echo This is only needed once.
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','%~dp0scripts\firewall.ps1'"
+)
 node scripts\serve-apk.mjs "Workout.apk"
 pause
 exit /b 0
