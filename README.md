@@ -120,7 +120,9 @@ uninstall the old app first: that deletes its data. `scripts/serve-apk.mjs` does
 and can be run on its own to re-share the last build. Steps whose files haven't changed since the last
 successful run are skipped (`scripts/build-steps.mjs` keeps a fingerprint of each step's inputs), it
 builds only for phones (arm64), and Gradle reuses earlier work from its build cache, so repeat runs
-are much faster; with no changes at all it just shares the existing `Workout.apk`.
+are much faster; with no changes at all it just shares the existing `Workout.apk`. Lint checks are
+skipped in these builds, and `react-native.config.js` leaves out the native code of two packages the
+app never uses (Reanimated and Gesture Handler, which only come along with Expo Router).
 
 ## Installing on your phone (Windows, one click)
 

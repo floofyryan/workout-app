@@ -18,13 +18,13 @@ const STEPS = {
   install: { inputs: ['package.json', 'package-lock.json'], stamp: 'node_modules/.build-stamp-install', output: 'node_modules' },
   // Generating android/: app settings, config plugins and the installed packages.
   prebuild: {
-    inputs: ['app.json', 'package.json', 'package-lock.json', 'plugins', 'assets'],
+    inputs: ['app.json', 'package.json', 'package-lock.json', 'plugins', 'assets', 'react-native.config.js'],
     stamp: 'android/.build-stamp-prebuild',
     output: 'android',
   },
   // Building the app file: everything that goes into it.
   apk: {
-    inputs: ['app.json', 'package.json', 'package-lock.json', 'plugins', 'assets', 'src', 'babel.config.js', 'metro.config.js', 'tsconfig.json'],
+    inputs: ['app.json', 'package.json', 'package-lock.json', 'plugins', 'assets', 'src', 'babel.config.js', 'metro.config.js', 'tsconfig.json', 'react-native.config.js'],
     stamp: '.build-stamp-apk',
     output: 'Workout.apk',
   },
