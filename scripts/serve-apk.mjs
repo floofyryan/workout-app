@@ -6,7 +6,9 @@ import { createServer } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import qrcode from 'qrcode-terminal';
+
+// The QR code is a nice-to-have: without the package, the address is still printed.
+const qrcode = await import('qrcode-terminal').then((m) => m.default ?? m).catch(() => null);
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const apk = resolve(process.argv[2] ?? `${root}/android/app/build/outputs/apk/release/app-release.apk`);
@@ -73,7 +75,8 @@ server.listen(PORT, '0.0.0.0', () => {
   }
   const url = `http://${ips[0]}:${PORT}/`;
   console.log('\nScan this with your phone camera (phone and computer on the same Wi-Fi):\n');
-  qrcode.generate(url, { small: true });
+  if (qrcode) qrcode.generate(url, { small: true });
+  else console.log('  (QR code unavailable - type the address below into the phone instead)');
   console.log(`\nOr type this address into the phone's browser:  ${url}`);
   if (ips.length > 1) console.log(`If that doesn't open, try: ${ips.slice(1).map((ip) => `http://${ip}:${PORT}/`).join('  ')}`);
   console.log('\nIf Windows asks whether to allow Node.js on networks, choose Allow (private networks).');

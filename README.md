@@ -117,14 +117,18 @@ QR code. With the phone on the same Wi-Fi, scan it with the camera, tap **Downlo
 and tap **Install**/**Update** (the first time, allow the browser to install unknown apps). It
 installs over the existing app and keeps all data, because it's signed with the same key. Never
 uninstall the old app first: that deletes its data. `scripts/serve-apk.mjs` does the Wi-Fi part
-and can be run on its own to re-share the last build.
+and can be run on its own to re-share the last build. Steps whose files haven't changed since the last
+successful run are skipped (`scripts/build-steps.mjs` keeps a fingerprint of each step's inputs), it
+builds only for phones (arm64), and Gradle reuses earlier work from its build cache, so repeat runs
+are much faster; with no changes at all it just shares the existing `Workout.apk`.
 
 ## Installing on your phone (Windows, one click)
 
 With Android Studio installed and your phone connected (USB debugging, or paired over Wi-Fi in
 Android Studio → Device Manager), double-click **`build-phone.bat`**. It pulls the latest code,
 installs packages, generates the Android project and installs a release build on the phone. The
-`plugins/withGradleMemory.js` config plugin gives Gradle enough memory for this, so the generated
+`plugins/withGradleMemory.js` config plugin gives Gradle enough memory for this (and turns on its
+build cache and parallel builds), so the generated
 `android/` folder never needs editing.
 
 ## Building an APK

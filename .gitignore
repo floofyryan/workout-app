@@ -17,3 +17,4 @@ npm-debug.*
 
 # The app file built by install-without-usb.bat
 Workout.apk
+.build-stamp-apk

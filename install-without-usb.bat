@@ -23,27 +23,49 @@ if errorlevel 1 (
   goto :fail
 )
 
+REM Steps whose files haven't changed since the last successful run are skipped, so repeat runs are quick.
+REM Packages must include the development tools (e.g. the QR code), so don't install in production mode.
+set NODE_ENV=
 echo.
-echo [2/4] Installing packages...
-call npm install
-if errorlevel 1 goto :fail
-
-echo.
-echo [3/4] Preparing the Android project...
-call npx expo prebuild -p android --clean --no-install
-if errorlevel 1 goto :fail
-REM Clear compiled native code left over from earlier builds (it can hold mismatched versions).
-for %%m in (expo-modules-core react-native-worklets react-native-reanimated react-native-gesture-handler react-native-screens) do (
-  if exist "node_modules\%%m\android\.cxx" rmdir /s /q "node_modules\%%m\android\.cxx"
-  if exist "node_modules\%%m\android\build" rmdir /s /q "node_modules\%%m\android\build"
+echo [2/4] Packages...
+node scripts\build-steps.mjs need install
+if errorlevel 1 (
+  echo     Up to date - skipped.
+) else (
+  call npm install --include=dev --no-audit --no-fund
+  if errorlevel 1 goto :fail
+  REM New package versions: clear compiled native code built against the old ones.
+  for %%m in (expo-modules-core react-native-worklets react-native-reanimated react-native-gesture-handler react-native-screens) do (
+    if exist "node_modules\%%m\android\.cxx" rmdir /s /q "node_modules\%%m\android\.cxx"
+    if exist "node_modules\%%m\android\build" rmdir /s /q "node_modules\%%m\android\build"
+  )
+  node scripts\build-steps.mjs done install
 )
 
 echo.
-echo [4/4] Building the app (can take ~10 minutes the first time)...
+echo [3/4] Android project...
+node scripts\build-steps.mjs need prebuild
+if errorlevel 1 (
+  echo     Up to date - skipped.
+) else (
+  call npx expo prebuild -p android --clean --no-install
+  if errorlevel 1 goto :fail
+  node scripts\build-steps.mjs done prebuild
+)
+
+echo.
+echo [4/4] Building the app...
+node scripts\build-steps.mjs need apk
+if errorlevel 1 (
+  echo     Nothing changed since the last build - using Workout.apk.
+  goto :share
+)
 pushd android
 REM Phones use arm64 chips; building only that is much faster and avoids emulator-only code.
+set NODE_ENV=production
 call gradlew.bat assembleRelease -PreactNativeArchitectures=arm64-v8a
 set BUILD_RESULT=%errorlevel%
+set NODE_ENV=
 popd
 if not "%BUILD_RESULT%"=="0" goto :fail
 if not exist "android\app\build\outputs\apk\release\app-release.apk" (
@@ -51,9 +73,11 @@ if not exist "android\app\build\outputs\apk\release\app-release.apk" (
   goto :fail
 )
 copy /y "android\app\build\outputs\apk\release\app-release.apk" "Workout.apk" >nul
-
+node scripts\build-steps.mjs done apk
 echo.
 echo Built! The app file is also saved as Workout.apk in this folder.
+
+:share
 node scripts\serve-apk.mjs "Workout.apk"
 pause
 exit /b 0
