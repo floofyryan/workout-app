@@ -32,13 +32,17 @@ node scripts\build-steps.mjs need install
 if errorlevel 1 (
   echo     Up to date - skipped.
 ) else (
+  REM Only when the package versions really changed: clear compiled native code built against the
+  REM old ones (otherwise keep it - recompiling it is the slowest part of the build).
+  node scripts\build-steps.mjs changed install
+  if not errorlevel 1 (
+    for %%m in (expo-modules-core react-native-worklets react-native-reanimated react-native-gesture-handler react-native-screens) do (
+      if exist "node_modules\%%m\android\.cxx" rmdir /s /q "node_modules\%%m\android\.cxx"
+      if exist "node_modules\%%m\android\build" rmdir /s /q "node_modules\%%m\android\build"
+    )
+  )
   call npm install --include=dev --no-audit --no-fund
   if errorlevel 1 goto :fail
-  REM New package versions: clear compiled native code built against the old ones.
-  for %%m in (expo-modules-core react-native-worklets react-native-reanimated react-native-gesture-handler react-native-screens) do (
-    if exist "node_modules\%%m\android\.cxx" rmdir /s /q "node_modules\%%m\android\.cxx"
-    if exist "node_modules\%%m\android\build" rmdir /s /q "node_modules\%%m\android\build"
-  )
   node scripts\build-steps.mjs done install
 )
 

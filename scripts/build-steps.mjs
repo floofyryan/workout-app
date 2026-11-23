@@ -1,6 +1,8 @@
 // Lets the build scripts skip steps whose inputs haven't changed since they last succeeded.
 //   node scripts/build-steps.mjs need <step>   exit code 0 = the step must run, 1 = up to date
 //   node scripts/build-steps.mjs done <step>   record that the step just succeeded
+//   node scripts/build-steps.mjs changed <step> exit code 0 = it ran before with different inputs
+//                                               (not just "never recorded"), 1 = otherwise
 // Each step's fingerprint is a hash of its input files, stored next to what the step produces, so
 // deleting that output (e.g. node_modules or android/) makes the step run again.
 import { createHash } from 'node:crypto';
@@ -51,13 +53,15 @@ export function fingerprint(step) {
 
 const [command, step] = process.argv.slice(2);
 const def = STEPS[step];
-if (!def || !['need', 'done'].includes(command)) {
-  console.error(`usage: build-steps.mjs need|done ${Object.keys(STEPS).join('|')}`);
+if (!def || !['need', 'done', 'changed'].includes(command)) {
+  console.error(`usage: build-steps.mjs need|done|changed ${Object.keys(STEPS).join('|')}`);
   process.exit(2);
 }
 const stampPath = join(root, def.stamp);
 if (command === 'done') {
   writeFileSync(stampPath, fingerprint(step));
+} else if (command === 'changed') {
+  process.exit(existsSync(stampPath) && readFileSync(stampPath, 'utf8') !== fingerprint(step) ? 0 : 1);
 } else {
   const upToDate =
     existsSync(join(root, def.output)) && existsSync(stampPath) && readFileSync(stampPath, 'utf8') === fingerprint(step);
