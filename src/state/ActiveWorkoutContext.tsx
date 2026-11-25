@@ -1,4 +1,5 @@
 import * as Haptics from 'expo-haptics';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSQLiteContext, type SQLiteDatabase } from 'expo-sqlite';
 import {
   createContext,
@@ -25,6 +26,7 @@ import {
 } from '@/lib/activeWorkout';
 import { defaultWorkoutName } from '@/lib/format';
 import {
+  askForNotifications,
   cancelTimerNotification,
   hideWorkoutInProgress,
   onWorkoutNotificationTap,
@@ -37,6 +39,7 @@ import type { Exercise, SetData, Template } from '@/lib/types';
 import { useSettings } from './SettingsContext';
 
 const STORAGE_KEY = 'active_workout';
+const KEEP_AWAKE_TAG = 'active-workout';
 
 export interface RestTimer {
   endsAt: number;
@@ -246,6 +249,29 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
 
   // Load the beeps once a workout is under way, so the first one plays on time.
   const hasWorkout = workout != null;
+
+  // Keep the screen on for as long as a workout is running, on every screen of the app (not just
+  // the workout screen: minimising it or checking another tab mid-workout counts too). Re-applied
+  // when the app comes back to the front.
+  useEffect(() => {
+    if (!hasWorkout || !settings.keepScreenOn) return;
+    const keepAwake = () => activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => {});
+    keepAwake();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') keepAwake();
+    });
+    return () => {
+      sub.remove();
+      deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => {});
+    };
+  }, [hasWorkout, settings.keepScreenOn]);
+
+  // Ask for notification permission when a workout starts, while the app is on screen. Asking when
+  // you leave the app doesn't work: Android can't show the question then and just says no.
+  const wantsNotifications = settings.workoutNotification || settings.timerNotifications;
+  useEffect(() => {
+    if (hasWorkout && wantsNotifications) askForNotifications();
+  }, [hasWorkout, wantsNotifications]);
   useEffect(() => {
     if (hasWorkout && settings.timerSounds) preloadTimerSounds();
   }, [hasWorkout, settings.timerSounds]);

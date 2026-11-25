@@ -1,5 +1,4 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useRef, useState } from 'react';
@@ -26,8 +25,6 @@ import { colors, radius, spacing } from '@/lib/theme';
 import { useActiveWorkout } from '@/state/ActiveWorkoutContext';
 import { useSettings } from '@/state/SettingsContext';
 
-const KEEP_AWAKE_TAG = 'active-workout';
-
 export default function ActiveWorkoutScreen() {
   const db = useSQLiteContext();
   const { settings } = useSettings();
@@ -36,14 +33,6 @@ export default function ActiveWorkoutScreen() {
   const now = useNow(1000);
   const [saving, setSaving] = useState(false);
   const finishing = useRef(false);
-
-  useEffect(() => {
-    if (!settings.keepScreenOn) return;
-    activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => {});
-    return () => {
-      deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => {});
-    };
-  }, [settings.keepScreenOn]);
 
   // Leave the screen once the workout is gone (finished or discarded), unless we're navigating to its summary.
   useEffect(() => {

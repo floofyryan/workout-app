@@ -1,6 +1,7 @@
 import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { NumberInput } from '@/components/NumberInput';
 import { Button, Card, Chip, SectionTitle } from '@/components/ui';
@@ -10,6 +11,7 @@ import { BACKUP_REASON_LABELS } from '@/lib/backupNames';
 import { dateStamp, pickTextFile, shareTextFile } from '@/lib/files';
 import { formatClock, formatDate, formatTime, parseNumber } from '@/lib/format';
 import { parseStrongCsv, workoutsToStrongCsv } from '@/lib/strongCsv';
+import { askForNotifications, notificationAccess, type NotificationAccess } from '@/lib/timerNotifications';
 import { colors, radius, spacing } from '@/lib/theme';
 import type { UnitSystem } from '@/lib/types';
 import { weightUnit } from '@/lib/units';
@@ -30,6 +32,39 @@ function askUnits(): Promise<UnitSystem | null> {
       ],
       { cancelable: true, onDismiss: () => resolve(null) },
     ),
+  );
+}
+
+/**
+ * Says so when Android isn't letting this app post notifications (so no "workout in progress"
+ * popup and no rest alerts with the screen off), with a way to fix it. Re-checked whenever the
+ * screen or the app comes back, since the fix happens in the phone's own settings.
+ */
+function NotificationAccessNote() {
+  const [access, setAccess] = useState<NotificationAccess | null>(null);
+  const check = useCallback(() => {
+    notificationAccess().then(setAccess);
+  }, []);
+  useFocusEffect(check);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => s === 'active' && check());
+    return () => sub.remove();
+  }, [check]);
+  if (access !== 'ask' && access !== 'blocked') return null;
+  return (
+    <View style={styles.warning}>
+      <Text style={styles.warningText}>
+        Notifications are off for this app, so the workout popup and the screen-off timer alerts can&apos;t
+        show.
+      </Text>
+      <Button
+        title={access === 'ask' ? 'Allow notifications' : 'Open phone settings'}
+        small
+        variant="secondary"
+        onPress={() => (access === 'ask' ? askForNotifications().then(check) : Linking.openSettings())}
+        style={{ marginTop: spacing.sm }}
+      />
+    </View>
   );
 }
 
@@ -189,6 +224,7 @@ export default function SettingsScreen() {
           <Text style={[styles.text, { flex: 1, marginRight: spacing.md }]}>Notify me a workout is running when I leave the app</Text>
           <Switch value={settings.workoutNotification} onValueChange={(v) => updateSettings({ workoutNotification: v })} />
         </View>
+        {(settings.workoutNotification || settings.timerNotifications) && <NotificationAccessNote />}
         <View style={styles.switchRow}>
           <Text style={[styles.text, { flex: 1, marginRight: spacing.md }]}>Adventure mode (XP, monsters & character)</Text>
           <Switch value={settings.adventureMode} onValueChange={(v) => updateSettings({ adventureMode: v })} />
@@ -273,5 +309,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   hint: { color: colors.faint, fontSize: 12, marginTop: spacing.sm },
+  warning: {
+    marginTop: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(245,158,11,0.12)',
+  },
+  warningText: { color: colors.warning, fontSize: 13 },
   gap: { marginTop: spacing.md },
 });
